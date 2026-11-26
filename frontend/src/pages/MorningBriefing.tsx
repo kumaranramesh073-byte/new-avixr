@@ -4,12 +4,12 @@
    Post-run: Mirror World layout (Bloomberg | Causal Graph | BlackRock + Vanguard)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { RefreshCw, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { DashboardTabs } from '../components/dashboard/DashboardTabs';
-import HomeCommandCenter from '../components/dashboard/HomeCommandCenter';
+import HomeCommandCenter, { type LatestSimulationSummary } from '../components/dashboard/HomeCommandCenter';
 import type { EcosystemOutput } from '../components/dashboard/types';
 
 
@@ -52,8 +52,26 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3100/api';
 export default function MorningBriefing() {
     const { businessDNA, resetOnboarding, user } = useAuthStore();
     const [data, setData] = useState<SimulationResponse | null>(null);
+    const [latestSim, setLatestSim] = useState<LatestSimulationSummary | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`${API_BASE}/sessions/simulations/latest`, {
+                    headers: await getAuthHeaders(),
+                });
+                if (!res.ok) return;
+                const json = await res.json();
+                if (!cancelled && json?.simulation) {
+                    setLatestSim(json.simulation);
+                }
+            } catch { /* ignore */ }
+        })();
+        return () => { cancelled = true; };
+    }, []);
 
     // Build legacy userParams shape from BusinessDNA
     const buildParams = useCallback(() => {
@@ -163,6 +181,7 @@ export default function MorningBriefing() {
             dna={businessDNA}
             userName={user?.displayName}
             phase={loading ? 'running' : 'idle'}
+            latestSimulation={latestSim}
             onRun={runSimulation}
             onResetDNA={resetOnboarding}
         />

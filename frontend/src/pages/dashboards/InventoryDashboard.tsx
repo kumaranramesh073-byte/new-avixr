@@ -33,6 +33,9 @@ export default function InventoryDashboard() {
 
     return (
         <div className="agent-dashboard">
+            <div style={{ marginBottom: 12, padding: '8px 14px', borderRadius: 8, background: '#fefce8', border: '1px solid #fde047', color: '#854d0e', fontSize: 12, fontWeight: 600 }}>
+                SIMULATION / SAMPLE TELEMETRY — Static inventory KPIs below are illustrative sample values; AI report above is generated dynamically.
+            </div>
             <DashboardHeader
                 title={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><Package size={28} color="#d97706" /> Inventory Optimization</div>}
                 breadcrumbs={['Inventory Optimization', 'Global Distribution Network']}

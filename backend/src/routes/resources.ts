@@ -1,43 +1,35 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Enterprise GenAI Platform — Static Resource Routes
-   Serves the platform's catalog data: data sources, models, suites, architecture.
+   Enterprise GenAI Platform — Resource Routes
+   Data sources read live from Supabase `data_source_configs` for the user's
+   organization (no fake "Connected" / "2.4M records" claims).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
+import { supabaseAdmin } from '../middleware/auth.js';
 
 export const resourcesRouter = Router();
 
-// ─── Data Sources ─────────────────────────────────────────────────────────────
-
-const DATA_SOURCES = [
-    { name: 'Snowflake', type: 'Data Warehouse', records: '2.4M', status: 'Connected', health: 99, lastSync: '2 min ago', region: 'US-West' },
-    { name: 'SAP S/4HANA', type: 'ERP System', records: '8.1M', status: 'Connected', health: 97, lastSync: '5 min ago', region: 'EU-Central' },
-    { name: 'Azure Data Lake', type: 'Cloud Storage', records: '15.2M', status: 'Connected', health: 100, lastSync: '1 min ago', region: 'US-East' },
-    { name: 'Salesforce CRM', type: 'CRM Platform', records: '1.2M', status: 'Connected', health: 95, lastSync: '10 min ago', region: 'US-West' },
-    { name: 'OSI PI Historian', type: 'Time Series', records: '45.6M', status: 'Connected', health: 98, lastSync: '30 sec ago', region: 'US-Central' },
-    { name: 'IBM Maximo', type: 'Asset Mgmt', records: '560K', status: 'Connected', health: 94, lastSync: '15 min ago', region: 'US-East' },
-    { name: 'Google BigQuery', type: 'Analytics', records: '9.8M', status: 'Syncing', health: 88, lastSync: '1 hr ago', region: 'US-Multi' },
-    { name: 'Delta Lake', type: 'Data Lakehouse', records: '32.1M', status: 'Connected', health: 100, lastSync: '1 min ago', region: 'US-West' },
-    { name: 'Apache Kafka', type: 'Event Streaming', records: '∞', status: 'Connected', health: 99, lastSync: 'Real-time', region: 'Global' },
-    { name: 'AWS Redshift', type: 'Data Warehouse', records: '5.7M', status: 'Connected', health: 96, lastSync: '8 min ago', region: 'US-East' },
-    { name: 'MongoDB Atlas', type: 'Document Store', records: '3.9M', status: 'Connected', health: 97, lastSync: '3 min ago', region: 'US-East' },
-    { name: 'Weaviate', type: 'Vector Database', records: '1.8M', status: 'Connected', health: 100, lastSync: '< 1 min', region: 'US-West' },
+// Supported connector catalog (default Disconnected until configured in data_source_configs)
+const CONNECTOR_CATALOG = [
+    { name: 'Snowflake', type: 'Data Warehouse', region: 'Unconfigured' },
+    { name: 'SAP S/4HANA', type: 'ERP System', region: 'Unconfigured' },
+    { name: 'Azure Data Lake', type: 'Cloud Storage', region: 'Unconfigured' },
+    { name: 'Salesforce CRM', type: 'CRM Platform', region: 'Unconfigured' },
+    { name: 'OSI PI Historian', type: 'Time Series', region: 'Unconfigured' },
+    { name: 'IBM Maximo', type: 'Asset Mgmt', region: 'Unconfigured' },
+    { name: 'Google BigQuery', type: 'Analytics', region: 'Unconfigured' },
+    { name: 'Delta Lake', type: 'Data Lakehouse', region: 'Unconfigured' },
+    { name: 'Apache Kafka', type: 'Event Streaming', region: 'Unconfigured' },
+    { name: 'AWS Redshift', type: 'Data Warehouse', region: 'Unconfigured' },
+    { name: 'MongoDB Atlas', type: 'Document Store', region: 'Unconfigured' },
+    { name: 'Weaviate', type: 'Vector Database', region: 'Unconfigured' },
 ];
-
-// ─── ML Models ────────────────────────────────────────────────────────────────
 
 const MODELS = [
-    { name: 'Reliability Prediction v3.2', type: 'Classification', accuracy: '94.7%', lastTrained: '2025-01-15', status: 'Production', framework: 'XGBoost + LSTM', version: 'v3.2.1', predictions: '2.3M' },
-    { name: 'Demand Forecasting v2.1', type: 'Time Series', accuracy: '91.3%', lastTrained: '2025-01-20', status: 'Production', framework: 'TFT + Prophet', version: 'v2.1.0', predictions: '890K' },
-    { name: 'Anomaly Detection v4.0', type: 'Unsupervised', accuracy: '97.2%', lastTrained: '2025-02-01', status: 'Production', framework: 'Isolation Forest + AE', version: 'v4.0.3', predictions: '5.1M' },
-    { name: 'NLP Document Classifier', type: 'NLP', accuracy: '89.5%', lastTrained: '2024-12-10', status: 'Staging', framework: 'RoBERTa', version: 'v1.4.0', predictions: '120K' },
-    { name: 'Supply Chain Optimizer', type: 'Optimization', accuracy: '88.9%', lastTrained: '2025-01-28', status: 'Production', framework: 'OR-Tools + QAOA', version: 'v2.0.1', predictions: '340K' },
-    { name: 'Fraud Detection v5.1', type: 'Classification', accuracy: '99.1%', lastTrained: '2025-02-05', status: 'Production', framework: 'GNN (PyG)', version: 'v5.1.2', predictions: '12.6M' },
-    { name: 'Churn Prediction v2.0', type: 'Classification', accuracy: '92.8%', lastTrained: '2025-02-10', status: 'Production', framework: 'LightGBM', version: 'v2.0.0', predictions: '1.5M' },
-    { name: 'Quantum Portfolio Opt', type: 'Optimization', accuracy: '86.4%', lastTrained: '2025-02-12', status: 'Staging', framework: 'VQE (PennyLane)', version: 'v0.9.1', predictions: '25K' },
+    { name: 'Reliability Prediction v3.2', type: 'Classification', accuracy: 'N/A', lastTrained: 'Catalog', status: 'Staging', framework: 'XGBoost + LSTM', version: 'v3.2.1', predictions: '0' },
+    { name: 'Demand Forecasting v2.1', type: 'Time Series', accuracy: 'N/A', lastTrained: 'Catalog', status: 'Staging', framework: 'TFT + Prophet', version: 'v2.1.0', predictions: '0' },
+    { name: 'Anomaly Detection v4.0', type: 'Unsupervised', accuracy: 'N/A', lastTrained: 'Catalog', status: 'Staging', framework: 'Isolation Forest + AE', version: 'v4.0.3', predictions: '0' },
 ];
-
-// ─── Industry Suites ──────────────────────────────────────────────────────────
 
 const SUITES = [
     { name: 'Asset Performance Suite', color: '#1E40AF', icon: '⚙️', description: 'Optimize asset reliability and lifecycle management', apps: ['Reliability', 'Process Optimization', 'Energy Management', 'Asset Connect'] },
@@ -48,8 +40,6 @@ const SUITES = [
     { name: 'Sustainability Suite', color: '#064E3B', icon: '🌱', description: 'ESG monitoring, carbon tracking, and sustainability reporting', apps: ['Energy Management', 'ESG'] },
     { name: 'State & Local Government', color: '#1F2937', icon: '🏛️', description: 'AI applications for government operations', apps: ['Property Appraisal', 'Law Enforcement', 'GenAI for Government Programs'] },
 ];
-
-// ─── Architecture Sections ────────────────────────────────────────────────────
 
 const ARCH_SECTIONS = [
     { title: 'Data Integration', items: ['SAP Hana', 'Oracle', 'Salesforce', 'IBM Maximo', 'OSI PI', 'AWS IoT', 'Amazon Kinesis', 'Azure Data Lake'], color: '#1E40AF' },
@@ -64,7 +54,48 @@ const ARCH_SECTIONS = [
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-resourcesRouter.get('/data-sources', (_req, res) => res.json(DATA_SOURCES));
+resourcesRouter.get('/data-sources', async (req: Request, res: Response) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('data_source_configs')
+            .select('id, name, source_type, status, record_count, last_sync_at, error_message, metadata')
+            .eq('organization_id', req.organizationId!)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        if (data && data.length > 0) {
+            return res.json(data.map(row => ({
+                id: row.id,
+                name: row.name,
+                type: row.source_type,
+                records: String(row.record_count ?? 0),
+                status: row.error_message ? 'Error' : (row.status === 'connected' ? 'Connected' : 'Disconnected'),
+                health: row.error_message ? 0 : (row.status === 'connected' ? 100 : 0),
+                lastSync: row.last_sync_at ? new Date(row.last_sync_at).toISOString() : 'Never',
+                region: (row.metadata as Record<string, unknown>)?.region || 'Custom',
+                configured: true,
+            })));
+        }
+
+        // Honest unconfigured catalog — zero fake "Connected" or fake record counts
+        return res.json(CONNECTOR_CATALOG.map(c => ({
+            name: c.name,
+            type: c.type,
+            records: '0',
+            status: 'Disconnected',
+            health: 0,
+            lastSync: 'Not configured',
+            region: c.region,
+            configured: false,
+        })));
+    } catch (err: any) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
 resourcesRouter.get('/models', (_req, res) => res.json(MODELS));
 resourcesRouter.get('/suites', (_req, res) => res.json(SUITES));
 resourcesRouter.get('/architecture', (_req, res) => res.json(ARCH_SECTIONS));

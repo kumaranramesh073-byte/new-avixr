@@ -21,16 +21,20 @@ interface DNA {
     riskAppetite?: string;
     aiPriority?: string;
     annualRevenue?: string;
+    monthlyRevenue?: string;
+    teamSize?: string;
+    customerType?: string;
+    goals?: string[];
+}
+
+export interface LatestSimulationSummary {
+    market_score?: number | null;
+    competitor_threat?: number | null;
+    volatility_index?: number | null;
+    created_at?: string;
 }
 
 type Phase = 'idle' | 'running';
-
-// Deterministic pseudo-metric from a seed (stable across renders).
-function seeded(seed: string, salt: number) {
-    let h = 2166136261 ^ salt;
-    for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return ((h >>> 0) % 1000) / 1000;
-}
 
 interface Signal {
     key: string;
@@ -56,9 +60,9 @@ const ORDER = ['twin', 'market', 'competitor', 'risk', 'opportunity', 'financial
 const RX = 40, RY = 34; // ellipse radii in %
 
 export default function HomeCommandCenter({
-    dna, userName, onRun, onResetDNA, phase = 'idle',
+    dna, userName, onRun, onResetDNA, phase = 'idle', latestSimulation = null,
 }: {
-    dna: DNA; userName?: string; onRun: () => void; onResetDNA?: () => void; phase?: Phase;
+    dna: DNA; userName?: string; onRun: () => void; onResetDNA?: () => void; phase?: Phase; latestSimulation?: LatestSimulationSummary | null;
 }) {
     const reduce = useReducedMotion();
     const [now, setNow] = useState(new Date());
@@ -106,27 +110,26 @@ export default function HomeCommandCenter({
         return () => clearInterval(t);
     }, [phase]);
 
-    const seed = (dna.companyName || dna.industry || 'qsimutron').toLowerCase();
-    const v = (salt: number, lo: number, hi: number) => lo + seeded(seed, salt) * (hi - lo);
+    const hasSim = !!latestSimulation;
 
     const signals: Signal[] = useMemo(() => [
-        { key: 'twin', icon: <Activity size={16} />, label: 'Business Twin', value: `${Math.round(v(11, 82, 97))}%`, accent: '#16A34A', status: 'healthy',
-          impact: 'Operations running within tolerance', recommendation: 'Hold current operating cadence', stage: 'Initializing Business Twin', angle: 115, depth: 0 },
-        { key: 'ai', icon: <Brain size={16} />, label: 'AI Confidence', value: `${Math.round(v(51, 88, 98))}%`, accent: '#2563EB', status: 'healthy',
-          impact: 'High certainty across scenarios', recommendation: 'Act on the top 3 recommended plays', stage: 'Producing Recommendations', angle: 65, depth: 1 },
-        { key: 'market', icon: <Globe size={16} />, label: 'Market Signals', value: `${Math.round(v(21, 120, 320))}`, accent: '#2563EB', status: 'live',
-          impact: 'Demand momentum building', recommendation: 'Expand capacity in lead region', stage: 'Analyzing Market Conditions', angle: 162, depth: 0 },
-        { key: 'competitor', icon: <Users size={16} />, label: 'Competitor Signals', value: `${Math.round(v(71, 3, 9))} moves`, accent: '#DC2626', status: 'watch',
-          impact: 'Rival pricing & launch activity', recommendation: 'Counter within 14 days', stage: 'Loading Competitor Intelligence', angle: 18, depth: 1 },
-        { key: 'financial', icon: <BarChart3 size={16} />, label: 'Financial Signals', value: `$${v(31, 1.2, 4.8).toFixed(1)}M`, accent: '#0EA5E9', status: 'live',
-          impact: 'Runway extended ~2 quarters', recommendation: 'Reallocate spend toward growth', stage: 'Building Strategic Outcomes', angle: 205, depth: 1 },
-        { key: 'risk', icon: <Shield size={16} />, label: 'Risk Signals', value: `${v(61, 2.4, 6.8).toFixed(1)}/10`, accent: '#D97706', status: 'watch',
-          impact: 'Supplier concentration exposure', recommendation: 'Diversify sourcing this quarter', stage: 'Calculating Risk Exposure', angle: 335, depth: 0 },
-        { key: 'opportunity', icon: <Sparkles size={16} />, label: 'Opportunity Signals', value: `${Math.round(v(41, 4, 14))} open`, accent: '#7C3AED', status: 'healthy',
-          impact: 'New adjacent segments detected', recommendation: 'Pilot the fastest-moving segment', stage: 'Generating Ripple Effects', angle: 240, depth: 1 },
-        { key: 'customer', icon: <Heart size={16} />, label: 'Customer Signals', value: `${Math.round(v(81, 68, 92))}%`, accent: '#16A34A', status: 'healthy',
-          impact: 'Sentiment trending upward', recommendation: 'Reinforce winning touchpoints', stage: 'Reading Customer Sentiment', angle: 300, depth: 0 },
-    ], [seed]);
+        { key: 'twin', icon: <Activity size={16} />, label: 'Business Twin', value: dna.industry || 'Configured', accent: '#16A34A', status: 'healthy',
+          impact: `Sector context: ${dna.industry || 'Pending'} (${dna.teamSize || 'Team N/A'})`, recommendation: 'Run OCT Simulation to generate twin scenario', stage: 'Initializing Business Twin', angle: 115, depth: 0 },
+        { key: 'ai', icon: <Brain size={16} />, label: 'Simulation Score', value: latestSimulation?.market_score != null ? `${Math.round(latestSimulation.market_score)}/100` : (dna.aiPriority || 'Ready'), accent: '#2563EB', status: hasSim ? 'watch' : 'healthy',
+          impact: hasSim ? 'Last AI simulation composite market score (SIMULATION)' : `AI focus: ${dna.aiPriority || 'Balanced'}`, recommendation: 'Run OCT Simulation for updated AI scoring', stage: 'Producing Recommendations', angle: 65, depth: 1 },
+        { key: 'market', icon: <Globe size={16} />, label: 'Primary Market', value: dna.primaryMarkets?.[0] || 'Global', accent: '#2563EB', status: 'healthy',
+          impact: `Target markets: ${dna.primaryMarkets?.join(', ') || 'Not specified'}`, recommendation: 'Review Market Intel module for grounded sources', stage: 'Analyzing Market Conditions', angle: 162, depth: 0 },
+        { key: 'competitor', icon: <Users size={16} />, label: 'Threat Index (Sim)', value: latestSimulation?.competitor_threat != null ? `${Math.round(latestSimulation.competitor_threat)}/100` : 'Not simulated', accent: '#DC2626', status: 'watch',
+          impact: hasSim ? 'Simulated competitor threat level from last OCT run' : 'No simulation executed yet', recommendation: 'Run OCT Simulation to assess competitor pressure', stage: 'Loading Competitor Intelligence', angle: 18, depth: 1 },
+        { key: 'financial', icon: <BarChart3 size={16} />, label: 'Revenue Baseline', value: dna.monthlyRevenue || dna.annualRevenue || 'Not set', accent: '#0EA5E9', status: 'healthy',
+          impact: `Reported DNA scale: ${dna.annualRevenue || 'Unconfigured'}`, recommendation: 'Update Business DNA in Settings as metrics change', stage: 'Building Strategic Outcomes', angle: 205, depth: 1 },
+        { key: 'risk', icon: <Shield size={16} />, label: 'Volatility (Sim)', value: latestSimulation?.volatility_index != null ? `${Math.round(latestSimulation.volatility_index)}/100` : (dna.riskAppetite || 'Not set'), accent: '#D97706', status: 'watch',
+          impact: hasSim ? 'Simulated volatility index (not live market feed)' : `Configured risk appetite: ${dna.riskAppetite || 'Pending'}`, recommendation: 'Inspect Risk Center for scenario stress-tests', stage: 'Calculating Risk Exposure', angle: 335, depth: 0 },
+        { key: 'opportunity', icon: <Sparkles size={16} />, label: 'Strategic Goal', value: dna.goals?.[0] || 'Growth', accent: '#7C3AED', status: 'healthy',
+          impact: `DNA objectives: ${dna.goals?.join(', ') || 'None selected'}`, recommendation: 'Align simulations with top strategic goal', stage: 'Generating Ripple Effects', angle: 240, depth: 1 },
+        { key: 'customer', icon: <Heart size={16} />, label: 'Customer Segment', value: dna.customerType || 'Not set', accent: '#16A34A', status: 'healthy',
+          impact: `Configured model: ${dna.customerType || 'Pending'}`, recommendation: 'Check Customer Sentiment module for analysis', stage: 'Reading Customer Sentiment', angle: 300, depth: 0 },
+    ], [dna, hasSim, latestSimulation]);
 
     const pos = (angle: number) => {
         const r = (angle * Math.PI) / 180;

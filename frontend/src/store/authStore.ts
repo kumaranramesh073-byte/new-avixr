@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { getAuthHeaders } from '../lib/authHeaders';
 
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'superadmin' | 'user';
 
 export interface AuthUser {
     email: string;
     displayName: string;
     uid: string;
     role: UserRole;
+    organizationId?: string;
     company?: string;
 }
 
@@ -40,27 +42,61 @@ interface AuthState {
     signup: (email: string, password: string, name?: string, company?: string) => Promise<void>;
     signInWithGoogle: () => Promise<void>;
     logout: () => Promise<void>;
-    completeOnboarding: (dna: BusinessDNA) => void;
-    resetOnboarding: () => void;
+    completeOnboarding: (dna: BusinessDNA) => Promise<void>;
+    resetOnboarding: () => Promise<void>;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3100/api';
 const DNA_KEY = 'qsimutron_dna';
 
-function resolveRole(email: string): UserRole {
-    const lower = email.toLowerCase();
-    return lower.includes('admin') || lower.includes('ceo') || lower.includes('cto') ? 'admin' : 'user';
-}
-
-function userFromSupabase(sbUser: { id: string; email?: string; user_metadata?: Record<string, string> }): AuthUser {
+function userFromSupabase(
+    sbUser: { id: string; email?: string; user_metadata?: Record<string, string> },
+    serverRole?: UserRole,
+    organizationId?: string
+): AuthUser {
     const email = sbUser.email ?? '';
     const meta = sbUser.user_metadata ?? {};
     return {
         uid: sbUser.id,
         email,
         displayName: meta.full_name || meta.name || email.split('@')[0],
-        role: resolveRole(email),
+        // NEVER derive admin role from email text — only from verified backend/DB user_profiles.role
+        role: serverRole ?? 'user',
+        organizationId,
         company: meta.company,
     };
+}
+
+async function fetchBackendProfile(): Promise<{
+    role: UserRole;
+    organizationId?: string;
+    dna: BusinessDNA | null;
+    onboardingComplete: boolean;
+} | null> {
+    try {
+        const res = await fetch(`${API_BASE}/auth/me`, { headers: await getAuthHeaders() });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return {
+            role: data.role === 'superadmin' || data.role === 'admin' ? data.role : 'user',
+            organizationId: data.organizationId,
+            dna: data.dna ?? null,
+            onboardingComplete: !!data.onboardingComplete,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function readCachedDNA(): { dna: BusinessDNA | null; complete: boolean } {
+    try {
+        const raw = localStorage.getItem(DNA_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            return { dna: parsed.dna ?? null, complete: !!parsed.complete };
+        }
+    } catch { /* ignore */ }
+    return { dna: null, complete: false };
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -70,37 +106,45 @@ export const useAuthStore = create<AuthState>((set) => ({
     businessDNA: null,
 
     initialize: () => {
-        // Load DNA from localStorage
-        let dna: BusinessDNA | null = null;
-        let onboardingComplete = false;
-        try {
-            const raw = localStorage.getItem(DNA_KEY);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                dna = parsed.dna ?? null;
-                onboardingComplete = !!parsed.complete;
-            }
-        } catch { /* ignore */ }
+        const cached = readCachedDNA();
 
-        // Restore session from Supabase (reads from localStorage automatically)
-        supabase.auth.getSession().then(({ data }) => {
+        supabase.auth.getSession().then(async ({ data }) => {
             const sbUser = data.session?.user;
+            if (!sbUser) {
+                set({ user: null, businessDNA: null, onboardingComplete: false, isLoading: false });
+                return;
+            }
+
+            const profile = await fetchBackendProfile();
+            const dna = profile?.dna ?? cached.dna;
+            const complete = profile ? profile.onboardingComplete : cached.complete;
+            if (profile?.dna) {
+                localStorage.setItem(DNA_KEY, JSON.stringify({ complete, dna: profile.dna }));
+            }
+
             set({
-                user: sbUser ? userFromSupabase(sbUser) : null,
+                user: userFromSupabase(sbUser, profile?.role, profile?.organizationId),
                 businessDNA: dna,
-                onboardingComplete,
+                onboardingComplete: complete,
                 isLoading: false,
             });
         });
 
-        // Keep in sync with Supabase session changes (tab focus, token refresh, sign-out)
-        supabase.auth.onAuthStateChange((_event, session) => {
+        supabase.auth.onAuthStateChange(async (event, session) => {
             const sbUser = session?.user;
+            if (!sbUser) {
+                if (event === 'SIGNED_OUT') {
+                    localStorage.removeItem(DNA_KEY);
+                }
+                set({ user: null, businessDNA: null, onboardingComplete: false });
+                return;
+            }
+
+            const profile = await fetchBackendProfile();
             set(state => ({
-                user: sbUser ? userFromSupabase(sbUser) : null,
-                // Clear DNA only on explicit sign-out (not just token refresh)
-                businessDNA: sbUser ? state.businessDNA : null,
-                onboardingComplete: sbUser ? state.onboardingComplete : false,
+                user: userFromSupabase(sbUser, profile?.role ?? state.user?.role, profile?.organizationId ?? state.user?.organizationId),
+                businessDNA: profile ? profile.dna : state.businessDNA,
+                onboardingComplete: profile ? profile.onboardingComplete : state.onboardingComplete,
             }));
         });
     },
@@ -109,7 +153,15 @@ export const useAuthStore = create<AuthState>((set) => ({
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw new Error(error.message);
         if (!data.user) throw new Error('No user returned');
-        set({ user: userFromSupabase(data.user) });
+        const profile = await fetchBackendProfile();
+        if (profile?.dna) {
+            localStorage.setItem(DNA_KEY, JSON.stringify({ complete: profile.onboardingComplete, dna: profile.dna }));
+        }
+        set({
+            user: userFromSupabase(data.user, profile?.role, profile?.organizationId),
+            businessDNA: profile?.dna ?? null,
+            onboardingComplete: !!profile?.onboardingComplete,
+        });
     },
 
     signup: async (email, password, name, company) => {
@@ -124,9 +176,13 @@ export const useAuthStore = create<AuthState>((set) => ({
             },
         });
         if (error) throw new Error(error.message);
-        // Supabase may return a user even before email confirmation
         if (data.user) {
-            set({ user: userFromSupabase(data.user) });
+            const profile = await fetchBackendProfile();
+            set({
+                user: userFromSupabase(data.user, profile?.role, profile?.organizationId),
+                businessDNA: profile?.dna ?? null,
+                onboardingComplete: !!profile?.onboardingComplete,
+            });
         }
     },
 
@@ -146,12 +202,29 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: null, businessDNA: null, onboardingComplete: false });
     },
 
-    completeOnboarding: (dna) => {
-        localStorage.setItem(DNA_KEY, JSON.stringify({ complete: true, dna }));
-        set({ onboardingComplete: true, businessDNA: dna });
+    completeOnboarding: async (dna) => {
+        const res = await fetch(`${API_BASE}/dna`, {
+            method: 'PUT',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify(dna),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+            throw new Error(err.error || 'Failed to save Business DNA');
+        }
+        const saved = await res.json();
+        const persistedDna: BusinessDNA = saved.dna ?? dna;
+        localStorage.setItem(DNA_KEY, JSON.stringify({ complete: true, dna: persistedDna }));
+        set({ onboardingComplete: true, businessDNA: persistedDna });
     },
 
-    resetOnboarding: () => {
+    resetOnboarding: async () => {
+        try {
+            await fetch(`${API_BASE}/dna`, {
+                method: 'DELETE',
+                headers: await getAuthHeaders(),
+            });
+        } catch { /* ignore network errors during reset */ }
         localStorage.removeItem(DNA_KEY);
         set({ onboardingComplete: false, businessDNA: null });
     },

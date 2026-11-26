@@ -33,9 +33,7 @@ coverage/
 *credentials*.json
 *serviceAccount*.json
 
-# Sensitive files with hardcoded credentials/keys (excluded for security)
-backdoor/lib/api.ts
-backdoor/lib/auth-config.ts
+# Sensitive files excluded for security
 FETCH_HEAD
 
 # Logs

@@ -30,6 +30,7 @@ const NAV = [
   { title: "Overview", url: "/dashboard", icon: IconGauge },
   { title: "Users", url: "/dashboard/users", icon: IconUsers },
   { title: "LLM Requests", url: "/dashboard/requests", icon: IconActivity },
+  { title: "Operations", url: "/dashboard/operations", icon: IconCpu },
   { title: "Cost Settings", url: "/dashboard/costs", icon: IconCurrencyDollar },
   { title: "Commits", url: "/dashboard/commits", icon: IconBrandGithub },
 ];

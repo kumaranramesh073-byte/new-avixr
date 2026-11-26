@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 import { getAuthHeaders } from '../lib/authHeaders';
+import { supabase } from '../lib/supabase';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3100/api';
 const WS_BASE = import.meta.env.VITE_WS_BASE || 'ws://localhost:3100/ws';
@@ -73,11 +74,13 @@ export function useDeepResearch() {
         };
     }, []);
 
-    const connectWs = useCallback((researchId: string) => {
+    const connectWs = useCallback(async (researchId: string) => {
         // Close any existing connection
         wsRef.current?.close();
 
-        const ws = new WebSocket(`${WS_BASE}?sessionId=${researchId}`);
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token ?? '';
+        const ws = new WebSocket(`${WS_BASE}?sessionId=${encodeURIComponent(researchId)}&token=${encodeURIComponent(token)}`);
         wsRef.current = ws;
 
         ws.onmessage = (e) => {

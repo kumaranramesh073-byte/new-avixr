@@ -164,6 +164,23 @@ export function DashboardClient({ data }: { data: any }) {
         </Card>
       </div>
 
+      {/* Platform Entity Counts from Supabase */}
+      <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 lg:grid-cols-6 lg:px-6">
+        {[
+          { label: "Organizations", val: stats.totalOrganizations ?? 0 },
+          { label: "Sessions", val: stats.totalSessions ?? 0 },
+          { label: "Simulations", val: stats.totalSimulations ?? 0 },
+          { label: "News Articles", val: stats.totalNewsArticles ?? 0 },
+          { label: "Notifications", val: stats.totalNotifications ?? 0 },
+          { label: "Data Sources", val: stats.totalDataSources ?? 0 },
+        ].map((m) => (
+          <Card key={m.label} className="p-3">
+            <div className="text-[11px] text-muted-foreground">{m.label}</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums">{fmtInt(m.val)}</div>
+          </Card>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 px-4 lg:grid-cols-3 lg:px-6">
         <div className="lg:col-span-2">
           {/* Requests Chart */}

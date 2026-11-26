@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Activity, RefreshCw, Filter, Search, X, Check, AlertCircle, Info, ExternalLink, Plus, Trash2 } from 'lucide-react';
 import { DATA_SOURCES as INITIAL_SOURCES } from '../data/constants';
 import type { DataSource } from '../types';
 import { useToastStore } from '../store/toastStore';
+import { fetchDataSources } from '../api/client';
 
 export default function Data() {
     const [sources, setSources] = useState<DataSource[]>(INITIAL_SOURCES);
@@ -14,6 +15,16 @@ export default function Data() {
     const [showFilterDrop, setShowFilterDrop] = useState(false);
 
     const addToast = useToastStore((state) => state.addToast);
+
+    useEffect(() => {
+        fetchDataSources()
+            .then((rows) => {
+                if (Array.isArray(rows) && rows.length > 0) {
+                    setSources(rows as unknown as DataSource[]);
+                }
+            })
+            .catch(() => { /* keep disconnected catalog fallback */ });
+    }, []);
 
     // Filtered data
     const filteredSources = useMemo(() => {

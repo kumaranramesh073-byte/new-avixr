@@ -1,10 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Enterprise GenAI Platform — useWebSocket Hook
    Real-time streaming connection for session step-by-step updates.
+   Passes authenticated Supabase JWT via ?sessionId=...&token=...
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { StreamEvent } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface UseWebSocketOptions {
     url: string;
@@ -26,11 +28,13 @@ export function useWebSocket({
     const wsRef = useRef<WebSocket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
 
-    const connect = useCallback(() => {
+    const connect = useCallback(async () => {
         if (!sessionId || wsRef.current) return;
 
         try {
-            const fullUrl = `${url}/${sessionId}`;
+            const { data } = await supabase.auth.getSession();
+            const token = data.session?.access_token ?? '';
+            const fullUrl = `${url}?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(token)}`;
             const ws = new WebSocket(fullUrl);
 
             ws.onopen = () => {
@@ -40,8 +44,8 @@ export function useWebSocket({
 
             ws.onmessage = (event) => {
                 try {
-                    const data: StreamEvent = JSON.parse(event.data);
-                    onMessage?.(data);
+                    const parsed: StreamEvent = JSON.parse(event.data);
+                    onMessage?.(parsed);
                 } catch (e) {
                     console.error('WebSocket parse error:', e);
                 }
@@ -79,7 +83,7 @@ export function useWebSocket({
 
     useEffect(() => {
         if (autoConnect && sessionId) {
-            connect();
+            void connect();
         }
         return () => disconnect();
     }, [autoConnect, sessionId, connect, disconnect]);

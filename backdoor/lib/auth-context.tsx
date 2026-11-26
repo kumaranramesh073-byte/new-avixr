@@ -1,22 +1,18 @@
 "use client";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Q-SIMUTRON Control — Client Auth Context
-   Lightweight session kept in localStorage. This is a back-door monitoring
-   tool, not a public app, so we intentionally keep auth simple. Swap to a
-   cookie/JWT against the main backend when wiring real data.
+   Q-SIMUTRON Control — Server-Verified Admin Auth Context
+   Backed by HttpOnly cookie + Supabase Auth + backend user_profiles.role.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as React from "react";
-import { authenticate, type SessionUser } from "@/lib/auth-config";
-
-const STORAGE_KEY = "qsim-control-session";
+import type { SessionUser } from "@/lib/auth-config";
 
 interface AuthState {
   user: SessionUser | null;
   ready: boolean;
-  login: (email: string, password: string) => SessionUser | null;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ user: SessionUser | null; error?: string }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthState | undefined>(undefined);
@@ -26,26 +22,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
+    let active = true;
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (active) setUser(d.user ?? null);
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      })
+      .finally(() => {
+        if (active) setReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const login = React.useCallback(async (email: string, password: string) => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw) as SessionUser);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.user) {
+        return { user: null, error: data.error || "Invalid credentials or insufficient privileges" };
+      }
+      setUser(data.user as SessionUser);
+      return { user: data.user as SessionUser };
     } catch {
-      /* ignore corrupt session */
+      return { user: null, error: "Authentication request failed" };
     }
-    setReady(true);
   }, []);
 
-  const login = React.useCallback((email: string, password: string) => {
-    const session = authenticate(email, password);
-    if (session) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-      setUser(session);
-    }
-    return session;
-  }, []);
-
-  const logout = React.useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+  const logout = React.useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     setUser(null);
   }, []);
 

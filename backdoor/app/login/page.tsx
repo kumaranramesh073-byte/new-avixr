@@ -27,20 +27,17 @@ export default function LoginPage() {
     if (ready && user) router.replace("/dashboard");
   }, [ready, user, router]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setBusy(true);
-    // tiny delay for feel; this is local validation
-    setTimeout(() => {
-      const session = login(email, password);
-      if (session) {
-        router.replace("/dashboard");
-      } else {
-        setError("Invalid credentials. Access is restricted.");
-        setBusy(false);
-      }
-    }, 450);
+    const result = await login(email, password);
+    if (result.user) {
+      router.replace("/dashboard");
+    } else {
+      setError(result.error || "Invalid credentials. Access is restricted to verified admins.");
+      setBusy(false);
+    }
   }
 
   return (

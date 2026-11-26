@@ -143,18 +143,18 @@ export const ARCH_SECTIONS: ArchSection[] = [
 // ─── Data Sources ─────────────────────────────────────────────────────────
 
 export const DATA_SOURCES: DataSource[] = [
-    { name: 'Snowflake', type: 'Data Warehouse', records: '2.4M', status: 'Connected', health: 99, lastSync: '2 min ago', region: 'US-West' },
-    { name: 'SAP S/4HANA', type: 'ERP System', records: '8.1M', status: 'Connected', health: 97, lastSync: '5 min ago', region: 'EU-Central' },
-    { name: 'Azure Data Lake', type: 'Cloud Storage', records: '15.2M', status: 'Connected', health: 100, lastSync: '1 min ago', region: 'US-East' },
-    { name: 'Salesforce CRM', type: 'CRM Platform', records: '1.2M', status: 'Connected', health: 95, lastSync: '10 min ago', region: 'US-West' },
-    { name: 'OSI PI Historian', type: 'Time Series', records: '45.6M', status: 'Connected', health: 98, lastSync: '30 sec ago', region: 'US-Central' },
-    { name: 'IBM Maximo', type: 'Asset Mgmt', records: '560K', status: 'Connected', health: 94, lastSync: '15 min ago', region: 'US-East' },
-    { name: 'Google BigQuery', type: 'Analytics', records: '9.8M', status: 'Syncing', health: 88, lastSync: '1 hr ago', region: 'US-Multi' },
-    { name: 'Delta Lake', type: 'Data Lakehouse', records: '32.1M', status: 'Connected', health: 100, lastSync: '1 min ago', region: 'US-West' },
-    { name: 'Apache Kafka', type: 'Event Streaming', records: '∞', status: 'Connected', health: 99, lastSync: 'Real-time', region: 'Global' },
-    { name: 'AWS Redshift', type: 'Data Warehouse', records: '5.7M', status: 'Connected', health: 96, lastSync: '8 min ago', region: 'US-East' },
-    { name: 'MongoDB Atlas', type: 'Document Store', records: '3.9M', status: 'Connected', health: 97, lastSync: '3 min ago', region: 'US-East' },
-    { name: 'Weaviate', type: 'Vector Database', records: '1.8M', status: 'Connected', health: 100, lastSync: '< 1 min', region: 'US-West' },
+    { name: 'Snowflake', type: 'Data Warehouse', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'SAP S/4HANA', type: 'ERP System', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'Azure Data Lake', type: 'Cloud Storage', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'Salesforce CRM', type: 'CRM Platform', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'OSI PI Historian', type: 'Time Series', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'IBM Maximo', type: 'Asset Mgmt', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'Google BigQuery', type: 'Analytics', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'Delta Lake', type: 'Data Lakehouse', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'Apache Kafka', type: 'Event Streaming', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'AWS Redshift', type: 'Data Warehouse', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'MongoDB Atlas', type: 'Document Store', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
+    { name: 'Weaviate', type: 'Vector Database', records: '0', status: 'Disconnected', health: 0, lastSync: 'Not configured', region: 'Unconfigured' },
 ];
 
 // ─── ML Models ────────────────────────────────────────────────────────────

@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Q-SIMUTRON — Module Intelligence Route
-   POST /api/modules/:module/run   → runs the generic module agent for any
-   registered persona and returns the Standard Module Intelligence schema.
-   New modules are added by dropping a persona into the registry below.
+   POST /api/modules/:module/run   → hydrates Business DNA from Supabase, runs
+   the module agent, persists output to agent_outputs, and logs telemetry.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { Router, type Request, type Response } from 'express';
@@ -17,10 +16,16 @@ import { twinPersona } from '../agents/personas/twin.js';
 import { advisorPersona } from '../agents/personas/advisor.js';
 import { supabaseAdmin } from '../middleware/auth.js';
 import { config } from '../config.js';
+import {
+    loadActiveBusinessDNA,
+    dnaToUserParams,
+    getOrganizationPlan,
+    logAgentActivity,
+    saveAgentOutput,
+} from '../services/userContext.js';
 
 export const modulesRouter = Router();
 
-// ── Persona registry — add new modules here ────────────────────────────────
 const REGISTRY: Record<string, ModulePersona> = {
     forecasting: forecastingPersona,
     risk: riskPersona,
@@ -41,31 +46,55 @@ modulesRouter.post('/:module/run', async (req: Request, res: Response) => {
     if (!persona) {
         return res.status(404).json({ error: `Unknown module '${req.params.module}'` });
     }
-    const { userParams } = req.body as { userParams?: Record<string, string> };
-    if (!userParams || !userParams.industry) {
-        return res.status(400).json({ error: 'userParams with at least industry is required' });
+
+    const userId = req.userId!;
+    const organizationId = req.organizationId!;
+    const userEmail = req.userEmail || 'unknown@qsimutron.com';
+
+    const bodyParams = (req.body as { userParams?: Record<string, string> })?.userParams ?? {};
+    const persistedDNA = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
+    const mergedParams = dnaToUserParams(persistedDNA, bodyParams);
+
+    if (!mergedParams.industry) {
+        return res.status(400).json({ error: 'Business DNA or userParams.industry is required' });
     }
-    
+
     const startTime = Date.now();
+    const orgPlan = await getOrganizationPlan(organizationId);
+
     try {
-        const output = await runModuleAgent(persona, userParams);
+        const output = await runModuleAgent(persona, mergedParams);
         const latencyMs = Date.now() - startTime;
 
-        // Estimate tokens (roughly 1 token per 4 characters of the output + some fixed for prompt)
         const outputString = JSON.stringify(output);
         const estimatedCompletionTokens = Math.round(outputString.length / 4);
-        const estimatedPromptTokens = 1200; // Average prompt length across our personas
-        
-        // Fire-and-forget logging to Supabase
-        // req.userId and req.userEmail are populated by the requireAuth middleware
-        const userId = (req as any).userId || 'anonymous-id';
-        const userEmail = (req as any).userEmail || 'anonymous@qsimutron.com';
-        
-        supabaseAdmin.from('llm_requests').insert({
+        const estimatedPromptTokens = 1200;
+
+        await saveAgentOutput({
+            organizationId,
+            userId,
+            agentName: persona.title,
+            moduleName: persona.module,
+            query: `${persona.title} for ${mergedParams.companyName || mergedParams.industry}`,
+            outputData: output as unknown as Record<string, unknown>,
+            kpis: output.kpis,
+            confidenceScore: output.confidence?.overall ?? null,
+            executionTimeMs: latencyMs,
+        });
+
+        await logAgentActivity({
+            agentType: persona.title,
+            action: 'RunModule',
+            status: 'success',
+            organizationId,
+            userId,
+        });
+
+        const llmRow: Record<string, unknown> = {
             user_id: userId,
             user_email: userEmail,
-            company: userParams.companyName || 'Unknown',
-            plan: 'Pro', // placeholder
+            company: mergedParams.companyName || mergedParams.industry || 'Unknown',
+            plan: orgPlan,
             module: persona.title,
             provider: config.llmProvider,
             model: config.model,
@@ -73,24 +102,37 @@ modulesRouter.post('/:module/run', async (req: Request, res: Response) => {
             completion_tokens: estimatedCompletionTokens,
             cost_usd: (estimatedPromptTokens / 1_000_000 * 0.15) + (estimatedCompletionTokens / 1_000_000 * 0.60),
             latency_ms: latencyMs,
-            status: 'success'
-        }).then(({ error }) => {
-            if (error) console.error('[ModulesRouter] Failed to log request to Supabase:', error.message);
-        });
+            status: 'success',
+        };
 
-        return res.json(output);
+        const { error: logErr } = await supabaseAdmin.from('llm_requests').insert({
+            ...llmRow,
+            organization_id: organizationId,
+        });
+        if (logErr && (logErr.code === 'PGRST204' || /column .* does not exist/i.test(logErr.message))) {
+            await supabaseAdmin.from('llm_requests').insert(llmRow);
+        }
+
+        return res.json({
+            ...output,
+            is_simulated: true,
+            data_classification: output.grounded ? 'GROUNDED_AI_ANALYSIS' : 'AI_SIMULATION',
+        });
     } catch (err: any) {
         const latencyMs = Date.now() - startTime;
-        
-        const userId = (req as any).userId || 'anonymous-id';
-        const userEmail = (req as any).userEmail || 'anonymous@qsimutron.com';
+        await logAgentActivity({
+            agentType: persona.title,
+            action: 'RunModule',
+            status: 'error',
+            organizationId,
+            userId,
+        });
 
-        // Log the failure to Supabase
-        supabaseAdmin.from('llm_requests').insert({
+        await supabaseAdmin.from('llm_requests').insert({
             user_id: userId,
             user_email: userEmail,
-            company: userParams.companyName || 'Unknown',
-            plan: 'Pro',
+            company: mergedParams.companyName || 'Unknown',
+            plan: orgPlan,
             module: persona.title,
             provider: config.llmProvider,
             model: config.model,
@@ -98,11 +140,9 @@ modulesRouter.post('/:module/run', async (req: Request, res: Response) => {
             completion_tokens: 0,
             cost_usd: 0,
             latency_ms: latencyMs,
-            status: 'error'
-        }).then(({ error }) => {
-            if (error) console.error('[ModulesRouter] Failed to log error:', error.message);
+            status: 'error',
         });
-        
+
         console.error(`[Module:${req.params.module}] Fatal:`, err.message);
         return res.status(500).json({ error: `Module run failed: ${err.message}` });
     }

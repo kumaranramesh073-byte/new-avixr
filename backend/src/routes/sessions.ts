@@ -1,16 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Enterprise GenAI Platform — Session Routes (Agent Architecture)
-   POST   /api/sessions              → Create session + Orchestrator plans
-   GET    /api/sessions              → List all sessions
-   GET    /api/sessions/:id          → Get session + step results
-   POST   /api/sessions/:id/execute  → Execute plan (Sub-agents stream via WS)
-   DELETE /api/sessions/:id          → Delete session
+   POST   /api/sessions                     → Create session + Orchestrator plans
+   GET    /api/sessions                     → List user/org sessions
+   GET    /api/sessions/simulations/latest  → Latest persisted simulation for user
+   GET    /api/sessions/:id                 → Get session + step results
+   POST   /api/sessions/:id/execute         → Execute plan (Sub-agents stream via WS)
+   DELETE /api/sessions/:id                 → Delete session
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { broadcast, broadcastError } from '../ws.js';
+import { supabaseAdmin } from '../middleware/auth.js';
+import {
+    loadActiveBusinessDNA,
+    logAgentActivity,
+    saveAgentOutput,
+    type BusinessDNA,
+} from '../services/userContext.js';
 
 // Agents — Original
 import { generateOrchestrationPlan } from '../agents/orchestrator.js';
@@ -19,7 +27,7 @@ import { executeDashboard } from '../agents/dashboard.js';
 import { executeMLInsight } from '../agents/mlInsight.js';
 import { executeOptimizer } from '../agents/optimizer.js';
 
-// Agents — New Qsimutron Agents
+// Agents — Qsimutron Agents
 import { executePredictiveAnalysis } from '../agents/predictiveAnalysis.js';
 import { executeFinance } from '../agents/finance.js';
 import { executeStrategyOptimization } from '../agents/strategyOptimization.js';
@@ -32,9 +40,24 @@ import { runSimulation } from '../engines/simulationEngine.js';
 import { scoreDecision } from '../engines/decisionScoring.js';
 import { recordFeedback } from '../engines/feedbackLoop.js';
 
-import type { OrchestrationPlan, OrchestrationStep } from '../agentTypes.js';
+import type { OrchestrationPlan } from '../agentTypes.js';
 
 export const sessionsRouter = Router();
+
+function formatDnaContext(dna: BusinessDNA | null): string {
+    if (!dna) return '';
+    return [
+        `Company: ${dna.companyName} (${dna.industry})`,
+        dna.companyDescription ? `Description: ${dna.companyDescription}` : '',
+        dna.annualRevenue ? `Annual Revenue: ${dna.annualRevenue}` : '',
+        dna.teamSize ? `Team Size: ${dna.teamSize}` : '',
+        dna.primaryMarkets?.length ? `Markets: ${dna.primaryMarkets.join(', ')}` : '',
+        dna.customerType ? `Customer Type: ${dna.customerType}` : '',
+        dna.riskAppetite ? `Risk Appetite: ${dna.riskAppetite}` : '',
+        dna.aiPriority ? `AI Priority: ${dna.aiPriority}` : '',
+        dna.goals?.length ? `Goals: ${dna.goals.join(', ')}` : '',
+    ].filter(Boolean).join(' | ');
+}
 
 // ─── POST /api/sessions ───────────────────────────────────────────────────────
 
@@ -45,28 +68,29 @@ sessionsRouter.post('/', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'query is required' });
     }
 
+    const userId = req.userId!;
+    const organizationId = req.organizationId!;
     const sessionId = uuidv4();
-    await db.createSession(sessionId, query.trim(), agentMode);
 
-    // Respond immediately — orchestrator generates plan async
+    try {
+        await db.createSession(sessionId, query.trim(), agentMode, userId, organizationId);
+    } catch (err: any) {
+        console.error('[Sessions] Failed to create session in Supabase:', err.message);
+        return res.status(500).json({ error: 'Failed to create session' });
+    }
+
     res.status(201).json({ sessionId, status: 'planning' });
 
     // ── Intent Engine → Orchestrator Pipeline ──
     (async () => {
         try {
-            console.log(`[Pipeline] Starting orchestration for session ${sessionId}`);
+            const dna = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
+            const dnaCtx = formatDnaContext(dna);
+            const enrichedQuery = dnaCtx ? `${query.trim()}\n[Business DNA Context: ${dnaCtx}]` : query.trim();
 
-            // Step 1: Classify intent
-            console.log(`[Pipeline] Step 1/2: Classifying intent...`);
-            const intent = await classifyIntent(query.trim());
-            console.log(`[Pipeline] Intent classified: ${intent.primaryIntent} (confidence: ${intent.confidence})`);
+            const intent = await classifyIntent(enrichedQuery);
+            const plan = await generateOrchestrationPlan(enrichedQuery);
 
-            // Step 2: Generate orchestration plan
-            console.log(`[Pipeline] Step 2/2: Generating plan...`);
-            const plan = await generateOrchestrationPlan(query.trim());
-            console.log(`[Pipeline] Plan generated with ${plan.steps.length} steps.`);
-
-            // Re-map the plan to ensure robust IDs and sequence
             plan.steps = plan.steps.map((s, i) => ({
                 ...s,
                 id: uuidv4(),
@@ -74,11 +98,27 @@ sessionsRouter.post('/', async (req: Request, res: Response) => {
             }));
 
             await db.updateSessionPlan(sessionId, plan);
-            console.log(`[Pipeline] Session ${sessionId} updated with plan. Broadcasting...`);
+            await logAgentActivity({
+                agentType: 'Orchestrator',
+                action: 'GeneratePlan',
+                status: 'success',
+                organizationId,
+                userId,
+                sessionId,
+            });
+
             broadcast(sessionId, 'plan_ready', { plan, intent });
         } catch (err: any) {
             console.error('[Pipeline] Orchestrator Planning failed:', err);
             await db.markSessionError(sessionId);
+            await logAgentActivity({
+                agentType: 'Orchestrator',
+                action: 'GeneratePlan',
+                status: 'error',
+                organizationId,
+                userId,
+                sessionId,
+            });
             broadcastError(sessionId, `Plan generation failed: ${err.message || 'Unknown error'}`);
         }
     })();
@@ -86,22 +126,67 @@ sessionsRouter.post('/', async (req: Request, res: Response) => {
 
 // ─── GET /api/sessions ────────────────────────────────────────────────────────
 
-sessionsRouter.get('/', async (_req: Request, res: Response) => {
-    res.json(await db.listSessions());
+sessionsRouter.get('/', async (req: Request, res: Response) => {
+    try {
+        const sessions = await db.listSessions(req.userId!, req.organizationId!);
+        res.json(sessions);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/sessions/simulations/latest ────────────────────────────────────
+// Placed BEFORE /:id so Express does not treat "simulations" as a session ID.
+
+sessionsRouter.get('/simulations/latest', async (req: Request, res: Response) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('simulations')
+            .select('id, simulation_type, title, market_score, competitor_threat, volatility_index, system_stability, composite_score, decision_rank, summary, results, mermaid_graph_code, created_at')
+            .eq('organization_id', req.organizationId!)
+            .eq('user_id', req.userId!)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        return res.json({
+            simulation: data ?? null,
+            isSimulated: true,
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: err.message });
+    }
 });
 
 // ─── GET /api/sessions/:id ───────────────────────────────────────────────────
 
 sessionsRouter.get('/:id', async (req: Request, res: Response) => {
-    const session = await db.getSession(req.params.id);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    res.json({ ...session, steps: await db.getSteps(req.params.id) });
+    try {
+        const session = await db.getSession(req.params.id, req.userId!, req.organizationId!);
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        res.json({ ...session, steps: await db.getSteps(req.params.id) });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ─── POST /api/sessions/:id/execute ─────────────────────────────────────────
 
 sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
-    const session = await db.getSession(req.params.id);
+    const userId = req.userId!;
+    const organizationId = req.organizationId!;
+
+    let session;
+    try {
+        session = await db.getSession(req.params.id, userId, organizationId);
+    } catch (err: any) {
+        return res.status(500).json({ error: err.message });
+    }
+
     if (!session) return res.status(404).json({ error: 'Session not found' });
     if (!session.plan) return res.status(400).json({ error: 'No plan available yet. Wait for plan_ready event.' });
     if (session.status === 'executing') return res.status(409).json({ error: 'Already executing' });
@@ -112,26 +197,32 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
     await db.updateSessionStatus(session.id, 'executing', 5, 0);
     res.json({ message: 'Execution started', sessionId: session.id });
 
-    // Execute steps sequentially via specialized agents
     (async () => {
+        const dna = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
+        const dnaCtx = formatDnaContext(dna);
+        const agentQuery = dnaCtx ? `${session.query}\n[Business DNA: ${dnaCtx}]` : session.query;
+
         const agentOutputs: Record<string, unknown>[] = [];
         const agentsUsed: string[] = [];
 
         for (let i = 0; i < steps.length; i++) {
             const step = steps[i];
-            const stepId = step.id;
+            const stepId = step.id || uuidv4();
+            const stepStart = Date.now();
 
             await db.insertStep({
                 id: stepId,
                 sessionId: session.id,
+                organizationId,
                 stepOrder: i,
                 title: step.title,
                 description: step.description,
                 type: step.type,
                 dataSource: step.dataSource ?? '',
+                agentName: step.agent,
                 status: 'executing',
                 content: null,
-                createdAt: Date.now(),
+                createdAt: stepStart,
             });
 
             broadcast(session.id, 'step_start', {
@@ -151,39 +242,36 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
             );
 
             try {
-                // Route to the correct Specialized Agent
                 let agentResult;
                 switch (step.agent) {
-                    // ── New Qsimutron Agents ──
                     case 'PredictiveAnalysis':
-                        agentResult = await executePredictiveAnalysis(session.query, step);
+                        agentResult = await executePredictiveAnalysis(agentQuery, step);
                         break;
                     case 'Finance':
-                        agentResult = await executeFinance(session.query, step);
+                        agentResult = await executeFinance(agentQuery, step);
                         break;
                     case 'StrategyOptimization':
-                        agentResult = await executeStrategyOptimization(session.query, step);
+                        agentResult = await executeStrategyOptimization(agentQuery, step);
                         break;
                     case 'RiskSynthesis':
-                        agentResult = await executeRiskSynthesis(session.query, step);
+                        agentResult = await executeRiskSynthesis(agentQuery, step);
                         break;
                     case 'Personalization':
-                        agentResult = await executePersonalization(session.query, step);
+                        agentResult = await executePersonalization(agentQuery, step);
                         break;
-                    // ── Original Agents ──
                     case 'MLInsight':
-                        agentResult = await executeMLInsight(session.query, step);
+                        agentResult = await executeMLInsight(agentQuery, step);
                         break;
                     case 'Dashboard':
-                        agentResult = await executeDashboard(session.query, step);
+                        agentResult = await executeDashboard(agentQuery, step);
                         break;
                     case 'Optimizer':
-                        agentResult = await executeOptimizer(session.query, step);
+                        agentResult = await executeOptimizer(agentQuery, step);
                         break;
                     case 'InfoRetrieval':
                     case 'Orchestrator':
                     default:
-                        agentResult = await executeInfoRetrieval(session.query, step);
+                        agentResult = await executeInfoRetrieval(agentQuery, step);
                         break;
                 }
 
@@ -191,12 +279,30 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
                 agentsUsed.push(step.agent);
 
                 await db.updateStep(stepId, session.id, 'done', agentResult.data);
+                await saveAgentOutput({
+                    organizationId,
+                    userId,
+                    sessionId: session.id,
+                    agentName: step.agent,
+                    query: session.query,
+                    outputData: agentResult.data ?? {},
+                    executionTimeMs: Date.now() - stepStart,
+                });
+                await logAgentActivity({
+                    agentType: step.agent,
+                    action: 'ExecuteStep',
+                    status: 'success',
+                    organizationId,
+                    userId,
+                    sessionId: session.id,
+                });
 
                 const progress = Math.round(((i + 1) / steps.length) * 100);
                 await db.updateSessionStatus(session.id, 'executing', progress, i + 1);
 
                 broadcast(session.id, 'step_result', {
-                    stepIndex: i, stepId,
+                    stepIndex: i,
+                    stepId,
                     title: step.title,
                     type: step.type,
                     dataSource: step.dataSource,
@@ -206,10 +312,17 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
                 });
 
                 broadcast(session.id, 'step_done', { stepIndex: i, stepId });
-
             } catch (err) {
                 console.error(`[Execute] Step ${i} failed via Agent ${step.agent}:`, err);
                 await db.updateStep(stepId, session.id, 'error', null);
+                await logAgentActivity({
+                    agentType: step.agent,
+                    action: 'ExecuteStep',
+                    status: 'error',
+                    organizationId,
+                    userId,
+                    sessionId: session.id,
+                });
                 broadcastError(session.id, `Agent ${step.agent} failed to complete step "${step.title}".`);
             }
 
@@ -218,24 +331,39 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
 
         // ── Post-Execution Engine Layers ──
         try {
-            // Simulation Engine: Causal graph + ripple effects
             const simulationResult = await runSimulation(session.query, agentOutputs);
-            console.log(`[Pipeline] Simulation complete: stability=${simulationResult.systemStability}`);
-
-            // Decision Scoring Engine
             const decisionScore = await scoreDecision(session.query, agentOutputs, simulationResult.summary);
-            console.log(`[Pipeline] Decision scored: ${decisionScore.compositeScore}/100 → ${decisionScore.rank}`);
 
-            // Broadcast enriched results
+            // Persist orchestrated simulation record
+            await supabaseAdmin.from('simulations').insert({
+                organization_id: organizationId,
+                user_id: userId,
+                session_id: session.id,
+                simulation_type: 'orchestrated_session',
+                title: session.query.slice(0, 120),
+                user_params: dna ? { companyName: dna.companyName, industry: dna.industry } : {},
+                system_stability: simulationResult.systemStability,
+                composite_score: decisionScore.compositeScore,
+                decision_rank: decisionScore.rank,
+                summary: simulationResult.summary,
+                results: {
+                    simulation: simulationResult,
+                    decisionScore,
+                    is_simulated: true,
+                },
+            });
+
             broadcast(session.id, 'session_done', {
                 totalSteps: steps.length,
                 simulation: simulationResult,
-                decisionScore: decisionScore,
+                decisionScore,
+                isSimulated: true,
             });
 
-            // Feedback Loop: Record outcome
-            recordFeedback({
+            await recordFeedback({
                 sessionId: session.id,
+                organizationId,
+                userId,
                 query: session.query,
                 intent: 'general',
                 agentsUsed,
@@ -243,15 +371,12 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
                 rank: decisionScore.rank,
                 timestamp: Date.now(),
             });
-
         } catch (engineErr) {
             console.error('[Pipeline] Engine post-processing failed:', engineErr);
-            // Still mark session as done even if engines fail
             broadcast(session.id, 'session_done', { totalSteps: steps.length });
         }
 
         await db.completeSession(session.id);
-
     })().catch(async (err) => {
         console.error('[Execute] Fatal execution error:', err);
         await db.markSessionError(session.id);
@@ -262,7 +387,11 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
 // ─── DELETE /api/sessions/:id ────────────────────────────────────────────────
 
 sessionsRouter.delete('/:id', async (req: Request, res: Response) => {
-    const existed = await db.deleteSession(req.params.id);
-    if (!existed) return res.status(404).json({ error: 'Session not found' });
-    res.json({ message: 'Session deleted' });
+    try {
+        const existed = await db.deleteSession(req.params.id, req.userId!, req.organizationId!);
+        if (!existed) return res.status(404).json({ error: 'Session not found' });
+        res.json({ message: 'Session deleted' });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });

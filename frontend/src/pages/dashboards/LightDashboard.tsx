@@ -258,12 +258,15 @@ const LightDashboard: React.FC = () => {
           </div>
           <div className="topbar-right">
             <button className="t-btn"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>
-            <div className="env-chip"><span className="env-dot"></span>Production</div>
+            <div className="env-chip"><span className="env-dot"></span>Simulation Demo</div>
             <button className="avatar">QS</button>
           </div>
         </header>
 
         <main className="content">
+          <div style={{ marginBottom: 10, padding: '6px 12px', borderRadius: 6, background: '#fefce8', border: '1px solid #fde047', color: '#854d0e', fontSize: 11.5, fontWeight: 600 }}>
+            SIMULATION / DEMO DATA — Metrics and connector states below are illustrative sample fixtures, not live production readings.
+          </div>
           <div className="page-hd"><h1 className="page-title">{config.title}</h1><span className="page-time">Updated {lastUpdated}</span></div>
 
           <div className="metrics">

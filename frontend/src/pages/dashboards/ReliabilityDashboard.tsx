@@ -190,6 +190,9 @@ export default function ReliabilityDashboard() {
 
     return (
         <div className="agent-dashboard">
+            <div style={{ marginBottom: 12, padding: '8px 14px', borderRadius: 8, background: '#fefce8', border: '1px solid #fde047', color: '#854d0e', fontSize: 12, fontWeight: 600 }}>
+                SIMULATION / SAMPLE TELEMETRY — Asset sensor values below are illustrative sample readings; AI report above is generated dynamically.
+            </div>
             <DashboardHeader
                 title={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><Shield size={28} color="var(--qs-accent)" /> Reliability Intelligence</div>}
                 breadcrumbs={['Reliability Intelligence', 'ESP-1 Analysis']}

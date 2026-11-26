@@ -198,17 +198,24 @@ export default function Onboarding() {
         else setStep(s => s + 1);
     };
 
+    const [submitError, setSubmitError] = useState<string | null>(null);
+
     const handleSubmit = async () => {
         setIsSubmitting(true);
-        await new Promise(r => setTimeout(r, 1200));
+        setSubmitError(null);
         const dna: BusinessDNA = {
             companyName: companyName.trim(), companyWebsite: companyWebsite.trim(), companyDescription: companyDescription.trim(),
             industry, annualRevenue, teamSize, goals, riskAppetite,
             primaryMarkets, customerType, monthlySpend, monthlyRevenue,
             burnRate: String(burnRate), growthRate: String(growthRate), aiPriority, userRole,
         };
-        completeOnboarding(dna);
-        navigate('/morning');
+        try {
+            await completeOnboarding(dna);
+            navigate('/morning');
+        } catch (err: any) {
+            setSubmitError(err?.message || 'Failed to save Business DNA to server');
+            setIsSubmitting(false);
+        }
     };
 
     const progress = ((step + 1) / SECTIONS.length) * 100;
@@ -506,6 +513,11 @@ export default function Onboarding() {
                 </AnimatePresence>
 
                 {/* Navigation */}
+                {submitError && (
+                    <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12.5 }}>
+                        {submitError}
+                    </div>
+                )}
                 <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
                     <button
                         onClick={() => step > 0 && setStep(s => s - 1)}

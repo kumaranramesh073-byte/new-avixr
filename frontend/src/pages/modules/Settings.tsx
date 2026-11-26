@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Settings as SettingsIcon, Save, Database, Shield, BrainCircuit } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { useToastStore } from '../../store/toastStore';
 
 export default function Settings() {
     const { businessDNA, completeOnboarding } = useAuthStore();
+    const addToast = useToastStore(s => s.addToast);
     const [dnaForm, setDnaForm] = useState(businessDNA || { 
         companyName: '', companyWebsite: '', industry: '', companyDescription: '',
         annualRevenue: '', teamSize: '', goals: [], riskAppetite: '',
@@ -13,10 +15,20 @@ export default function Settings() {
     });
     const [saving, setSaving] = useState(false);
 
-    const handleSave = () => {
+    useEffect(() => {
+        if (businessDNA) setDnaForm(businessDNA);
+    }, [businessDNA]);
+
+    const handleSave = async () => {
         setSaving(true);
-        completeOnboarding(dnaForm);
-        setTimeout(() => setSaving(false), 1000);
+        try {
+            await completeOnboarding(dnaForm);
+            addToast('Business DNA saved to database', 'success');
+        } catch (err: any) {
+            addToast(err?.message || 'Failed to save Business DNA', 'error');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
