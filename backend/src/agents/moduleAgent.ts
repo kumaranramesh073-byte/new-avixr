@@ -123,15 +123,11 @@ export async function runModuleAgent(
     }
 
     const userPrompt = `TARGET COMPANY: ${company}
+${userParams.companyWebsite ? `Website: ${userParams.companyWebsite}` : ''}
 ${userParams.companyDescription ? `What they do: ${userParams.companyDescription}` : ''}
 Industry: ${industry}
-Geography: ${userParams.geography || 'Global'}
-Business Model: ${userParams.businessModel || ''}
-Revenue Range: ${userParams.revenueRange || ''}
-Company Size: ${userParams.companySize || ''}
-Strategic Priority: ${userParams.priority || ''}
-Risk Tolerance: ${userParams.riskTolerance || ''}
-AI Priority: ${userParams.aiPriority || ''}
+Team Size: ${userParams.teamSize || userParams.companySize || ''}
+Strategic Goals: ${userParams.goals || userParams.priority || ''}
 
 PUBLIC MARKET INTELLIGENCE:
 ${publicDataContext || 'No live feed — use your industry knowledge to produce specific, realistic intelligence for this exact company.'}
