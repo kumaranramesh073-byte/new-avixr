@@ -228,12 +228,20 @@ export const db = {
     },
 
     async deleteSession(id: string, userId: string, organizationId: string): Promise<boolean> {
-        // Delete child steps first to respect FK constraints
-        await supabaseAdmin
-            .from('simulation_steps')
-            .delete()
-            .eq('session_id', id)
-            .eq('organization_id', organizationId);
+        // Verify ownership BEFORE detaching/deleting child records (prevents cross-user IDOR)
+        const existing = await this.getSession(id, userId, organizationId);
+        if (!existing) {
+            return false;
+        }
+
+        // Clear or remove referencing child rows to satisfy FK constraints cleanly
+        await Promise.all([
+            supabaseAdmin.from('simulation_steps').delete().eq('session_id', id).eq('organization_id', organizationId),
+            supabaseAdmin.from('agent_logs').update({ session_id: null }).eq('session_id', id).eq('organization_id', organizationId),
+            supabaseAdmin.from('agent_outputs').update({ session_id: null }).eq('session_id', id).eq('organization_id', organizationId),
+            supabaseAdmin.from('simulations').update({ session_id: null }).eq('session_id', id).eq('organization_id', organizationId),
+            supabaseAdmin.from('query_history').update({ session_id: null }).eq('session_id', id).eq('organization_id', organizationId),
+        ]);
 
         const { data, error } = await supabaseAdmin
             .from('sessions')

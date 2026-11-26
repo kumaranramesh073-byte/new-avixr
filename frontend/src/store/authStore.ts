@@ -18,18 +18,8 @@ export interface BusinessDNA {
     companyWebsite: string;
     companyDescription: string;
     industry: string;
-    annualRevenue: string;
     teamSize: string;
     goals: string[];
-    riskAppetite: string;
-    primaryMarkets: string[];
-    customerType: string;
-    monthlySpend: string;
-    monthlyRevenue: string;
-    burnRate: string;
-    growthRate: string;
-    aiPriority: string;
-    userRole: string;
 }
 
 interface AuthState {

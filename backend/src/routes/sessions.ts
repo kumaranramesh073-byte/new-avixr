@@ -326,7 +326,7 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
                 session_id: session.id,
                 simulation_type: 'orchestrated_session',
                 title: session.query.slice(0, 120),
-                user_params: dna ? { companyName: dna.companyName, industry: dna.industry, userRole: dna.userRole } : {},
+                user_params: dna ? { companyName: dna.companyName, industry: dna.industry, teamSize: dna.teamSize, goals: dna.goals } : {},
                 system_stability: simulationResult.systemStability,
                 composite_score: decisionScore.compositeScore,
                 decision_rank: decisionScore.rank,

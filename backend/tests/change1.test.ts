@@ -100,38 +100,27 @@ test('decodeHtmlEntitiesAndStripTags decodes numeric and named HTML entities cle
 
 // ── 2. Business DNA Context Formatting Tests ─────────────────────────────────
 
-test('formatDnaSummary & dnaToUserParams preserve all required DNA attributes for agents', () => {
+test('formatDnaSummary & dnaToUserParams preserve all essential DNA attributes for agents', () => {
     const sampleDna: BusinessDNA = {
         companyName: 'Avixr Test Corp',
         companyWebsite: 'https://avixr.example.net',
         companyDescription: 'Enterprise decision intelligence platform',
         industry: 'SaaS',
-        annualRevenue: '$1M – $10M',
         teamSize: '10–50',
         goals: ['Revenue Growth', 'Risk Reduction'],
-        riskAppetite: 'Balanced',
-        primaryMarkets: ['India', 'United States'],
-        customerType: 'B2B',
-        monthlySpend: '$40K',
-        monthlyRevenue: '$150K',
-        burnRate: '20',
-        growthRate: '35',
-        aiPriority: 'Profitability',
-        userRole: 'Founder',
     };
 
     const summary = formatDnaSummary(sampleDna);
     assert.match(summary, /Avixr Test Corp/);
-    assert.match(summary, /Role: Founder/);
-    assert.match(summary, /Burn Rate: 20/);
-    assert.match(summary, /Growth Rate: 35/);
+    assert.match(summary, /SaaS/);
+    assert.match(summary, /Team Size: 10–50/);
+    assert.match(summary, /Goals: Revenue Growth, Risk Reduction/);
 
     const params = dnaToUserParams(sampleDna);
     assert.equal(params.companyName, 'Avixr Test Corp');
-    assert.equal(params.userRole, 'Founder');
-    assert.equal(params.burnRate, '20');
-    assert.equal(params.growthRate, '35');
-    assert.equal(params.primaryMarkets, 'India, United States');
+    assert.equal(params.teamSize, '10–50');
+    assert.equal(params.companySize, '10–50');
+    assert.equal(params.goals, 'Revenue Growth, Risk Reduction');
 });
 
 // ── 3. Auth & Admin Middleware Security Tests ────────────────────────────────

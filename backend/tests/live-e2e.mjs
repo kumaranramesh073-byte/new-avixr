@@ -11,9 +11,24 @@
  */
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import dotenv from 'dotenv';
+import ws from 'ws';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
+// Load local gitignored env files when present (never log secrets)
+for (const envPath of [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../backdoor/.env.local'),
+    path.resolve(process.cwd(), '../frontend/.env.local'),
+]) {
+    if (fs.existsSync(envPath)) {
+        dotenv.config({ path: envPath, override: false });
+    }
+}
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BACKEND_URL = (process.env.BACKEND_URL || 'http://127.0.0.1:3100').replace(/\/+$/, '');
@@ -25,6 +40,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const sbAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
+    realtime: { transport: ws },
 });
 
 async function apiFetch(path, options = {}, token) {
@@ -75,6 +91,7 @@ async function run() {
     try {
         const sbAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
             auth: { autoRefreshToken: false, persistSession: false },
+            realtime: { transport: ws },
         });
         const { data: signInData, error: siErr } = await sbAnon.auth.signInWithPassword({
             email: testUserEmail,
@@ -104,18 +121,8 @@ async function run() {
             companyWebsite: 'https://avixr-e2e.example.org',
             companyDescription: 'Automated Change 1 verification profile',
             industry: 'SaaS',
-            annualRevenue: '$1M – $10M',
             teamSize: '10–50',
             goals: ['Revenue Growth', 'Risk Reduction'],
-            riskAppetite: 'Balanced',
-            primaryMarkets: ['India', 'United States'],
-            customerType: 'B2B',
-            monthlySpend: '$25K',
-            monthlyRevenue: '$100K',
-            burnRate: '18',
-            growthRate: '32',
-            aiPriority: 'Profitability',
-            userRole: 'CTO',
         };
         const putDna1 = await apiFetch('/api/dna', { method: 'PUT', body: JSON.stringify(dnaInput) }, userToken);
         assert.equal(putDna1.status, 200);
@@ -123,11 +130,11 @@ async function run() {
 
         const putDna2 = await apiFetch('/api/dna', {
             method: 'PUT',
-            body: JSON.stringify({ ...dnaInput, growthRate: '45', aiPriority: 'Fast Growth' }),
+            body: JSON.stringify({ ...dnaInput, teamSize: '50–500', goals: ['Revenue Growth', 'Cost Reduction'] }),
         }, userToken);
         assert.equal(putDna2.status, 200);
         assert.equal(putDna2.json.dna.id, dnaId1, 'Updating DNA must update existing active row in place without duplicates');
-        assert.equal(String(putDna2.json.dna.growthRate), '45');
+        assert.equal(putDna2.json.dna.teamSize, '50–500');
 
         const { data: dnaRows } = await sbAdmin
             .from('business_dna_profiles')
@@ -158,7 +165,7 @@ async function run() {
         assert.equal(sessPatch.json.query, 'E2E Updated Session Query');
 
         const sessDel = await apiFetch(`/api/sessions/${sessionId}`, { method: 'DELETE' }, userToken);
-        assert.equal(sessDel.status, 200);
+        assert.equal(sessDel.status, 200, `Expected 200 on DELETE /api/sessions/${sessionId}, got ${sessDel.status}: ${sessDel.text}`);
 
         const sessAfterDel = await apiFetch(`/api/sessions/${sessionId}`, {}, userToken);
         assert.equal(sessAfterDel.status, 404);
@@ -181,6 +188,7 @@ async function run() {
         const sbUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
             global: { headers: { Authorization: `Bearer ${userToken}` } },
             auth: { autoRefreshToken: false, persistSession: false },
+            realtime: { transport: ws },
         });
         const { data: logsAsUser, error: logsErr } = await sbUser.from('agent_logs').select('id').limit(5);
         assert.equal((logsAsUser ?? []).length, 0, `Standard user must see 0 rows in agent_logs (got ${logsAsUser?.length}, err=${logsErr?.message})`);
@@ -197,6 +205,7 @@ async function run() {
         // Anon client must see 0 rows on protected tables
         const sbPureAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
             auth: { autoRefreshToken: false, persistSession: false },
+            realtime: { transport: ws },
         });
         const { data: anonProfiles } = await sbPureAnon.from('user_profiles').select('id').limit(5);
         assert.equal((anonProfiles ?? []).length, 0, 'Anonymous user must see 0 rows in user_profiles');
@@ -233,7 +242,9 @@ async function run() {
         }
     } finally {
         // Cleanup ONLY the temporary E2E test user & org created by this script
+        await sbAdmin.from('agent_logs').delete().eq('user_id', testUserId);
         await sbAdmin.from('business_dna_profiles').delete().eq('user_id', testUserId);
+        await sbAdmin.from('sessions').delete().eq('user_id', testUserId);
         await sbAdmin.from('user_profiles').delete().eq('id', testUserId);
         if (testOrgId) {
             await sbAdmin.from('organization_memberships').delete().eq('organization_id', testOrgId);

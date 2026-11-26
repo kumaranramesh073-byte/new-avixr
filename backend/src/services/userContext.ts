@@ -14,18 +14,8 @@ export interface BusinessDNA {
     companyWebsite: string;
     companyDescription: string;
     industry: string;
-    annualRevenue: string;
     teamSize: string;
     goals: string[];
-    riskAppetite: string;
-    primaryMarkets: string[];
-    customerType: string;
-    monthlySpend: string;
-    monthlyRevenue: string;
-    burnRate: string;
-    growthRate: string;
-    aiPriority: string;
-    userRole: string;
     updatedAt?: string;
 }
 
@@ -39,15 +29,6 @@ function asString(v: unknown, fallback = ''): string {
     return String(v);
 }
 
-function parseOptionalMetric(v: unknown): number | null {
-    if (v === null || v === undefined || v === '') return null;
-    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-    const cleaned = String(v).replace(/[%$,\s]/g, '').trim();
-    if (!cleaned) return null;
-    const num = Number(cleaned);
-    return Number.isFinite(num) ? num : null;
-}
-
 function normalizeWebsite(v: unknown): string | null {
     const raw = asString(v).trim();
     if (!raw) return null;
@@ -56,7 +37,6 @@ function normalizeWebsite(v: unknown): string | null {
 }
 
 function rowToDNA(row: Record<string, any>): BusinessDNA {
-    const meta = (row.metadata && typeof row.metadata === 'object' ? row.metadata : {}) as Record<string, unknown>;
     return {
         id: row.id,
         organizationId: row.organization_id,
@@ -67,20 +47,6 @@ function rowToDNA(row: Record<string, any>): BusinessDNA {
         industry: asString(row.industry),
         teamSize: asString(row.team_size),
         goals: asStringArray(row.goals),
-        annualRevenue: asString(row.annual_revenue ?? meta.annualRevenue),
-        riskAppetite: asString(row.risk_appetite ?? meta.riskAppetite),
-        primaryMarkets: asStringArray(
-            Array.isArray(row.primary_markets) && row.primary_markets.length > 0
-                ? row.primary_markets
-                : meta.primaryMarkets
-        ),
-        customerType: asString(row.customer_type ?? meta.customerType),
-        monthlySpend: asString(row.monthly_spend ?? meta.monthlySpend),
-        monthlyRevenue: asString(row.monthly_revenue ?? meta.monthlyRevenue),
-        burnRate: asString(row.burn_rate ?? meta.burnRate),
-        growthRate: asString(row.growth_rate ?? meta.growthRate),
-        aiPriority: asString(row.ai_priority ?? meta.aiPriority),
-        userRole: asString(row.user_role ?? meta.userRole),
         updatedAt: row.updated_at,
     };
 }
@@ -91,7 +57,7 @@ export async function loadActiveBusinessDNA(
 ): Promise<BusinessDNA | null> {
     const { data, error } = await supabaseAdmin
         .from('business_dna_profiles')
-        .select('*')
+        .select('id, organization_id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
         .eq('organization_id', organizationId)
         .eq('user_id', userId)
         .eq('is_active', true)
@@ -120,9 +86,6 @@ export async function saveActiveBusinessDNA(
     }
 
     const goals = asStringArray(input.goals);
-    const primaryMarkets = asStringArray(input.primaryMarkets);
-    const burnRateNum = parseOptionalMetric(input.burnRate);
-    const growthRateNum = parseOptionalMetric(input.growthRate);
 
     // Inspect existing active DNA profile(s) for this (org, user) so saving
     // UPDATES the active profile in place instead of creating duplicate profiles.
@@ -152,7 +115,7 @@ export async function saveActiveBusinessDNA(
         }
     }
 
-    const basePayload = {
+    const dnaPayload = {
         organization_id: organizationId,
         user_id: userId,
         company_name: companyName,
@@ -165,84 +128,28 @@ export async function saveActiveBusinessDNA(
         updated_at: now,
     };
 
-    // Structured payload (requires 001_change1_schema_and_dna.sql columns)
-    const structuredPayload = {
-        ...basePayload,
-        annual_revenue: asString(input.annualRevenue).trim() || null,
-        risk_appetite: asString(input.riskAppetite).trim() || null,
-        primary_markets: primaryMarkets,
-        customer_type: asString(input.customerType).trim() || null,
-        monthly_spend: asString(input.monthlySpend).trim() || null,
-        monthly_revenue: asString(input.monthlyRevenue).trim() || null,
-        burn_rate: burnRateNum,
-        growth_rate: growthRateNum,
-        ai_priority: asString(input.aiPriority).trim() || null,
-        user_role: asString(input.userRole).trim() || null,
-        metadata: {},
-    };
-
     const writeQuery = existingActiveId
         ? supabaseAdmin
             .from('business_dna_profiles')
-            .update(structuredPayload)
+            .update(dnaPayload)
             .eq('id', existingActiveId)
             .eq('organization_id', organizationId)
             .eq('user_id', userId)
-            .select('*')
+            .select('id, organization_id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
             .single()
         : supabaseAdmin
             .from('business_dna_profiles')
-            .insert(structuredPayload)
-            .select('*')
+            .insert(dnaPayload)
+            .select('id, organization_id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
             .single();
 
     const { data, error } = await writeQuery;
 
-    if (!error && data) {
-        return rowToDNA(data);
+    if (error || !data) {
+        throw new Error(`Failed to save Business DNA: ${error?.message ?? 'unknown error'}`);
     }
 
-    // If migration 001 has not been applied yet (PostgREST PGRST204 unknown column),
-    // store extended fields in metadata temporarily without losing data.
-    if (error && (error.code === 'PGRST204' || /column .* does not exist/i.test(error.message))) {
-        console.warn('[DNA] Structured DNA columns missing — run backend/migrations/001_change1_schema_and_dna.sql. Falling back to metadata.');
-        const fallbackPayload = {
-            ...basePayload,
-            metadata: {
-                annualRevenue: asString(input.annualRevenue).trim(),
-                riskAppetite: asString(input.riskAppetite).trim(),
-                primaryMarkets,
-                customerType: asString(input.customerType).trim(),
-                monthlySpend: asString(input.monthlySpend).trim(),
-                monthlyRevenue: asString(input.monthlyRevenue).trim(),
-                burnRate: asString(input.burnRate).trim(),
-                growthRate: asString(input.growthRate).trim(),
-                aiPriority: asString(input.aiPriority).trim(),
-                userRole: asString(input.userRole).trim(),
-            },
-        };
-        const fbQuery = existingActiveId
-            ? supabaseAdmin
-                .from('business_dna_profiles')
-                .update(fallbackPayload)
-                .eq('id', existingActiveId)
-                .select('*')
-                .single()
-            : supabaseAdmin
-                .from('business_dna_profiles')
-                .insert(fallbackPayload)
-                .select('*')
-                .single();
-
-        const { data: fbData, error: fbErr } = await fbQuery;
-
-        if (fbErr || !fbData) {
-            throw new Error(`Failed to save Business DNA: ${fbErr?.message ?? 'unknown error'}`);
-        }
-        return rowToDNA(fbData);
-    }
-
-    throw new Error(`Failed to save Business DNA: ${error?.message ?? 'unknown error'}`);
+    return rowToDNA(data);
 }
 
 export async function deactivateActiveBusinessDNA(userId: string, organizationId: string): Promise<void> {
@@ -262,19 +169,9 @@ export function formatDnaSummary(dna: BusinessDNA | null): string {
     if (!dna) return '';
     return [
         `Company: ${dna.companyName} (${dna.industry})`,
-        dna.userRole ? `Role: ${dna.userRole}` : '',
         dna.companyWebsite ? `Website: ${dna.companyWebsite}` : '',
         dna.companyDescription ? `Description: ${dna.companyDescription}` : '',
-        dna.annualRevenue ? `Annual Revenue: ${dna.annualRevenue}` : '',
-        dna.monthlyRevenue ? `Monthly Revenue: ${dna.monthlyRevenue}` : '',
-        dna.monthlySpend ? `Monthly Spend: ${dna.monthlySpend}` : '',
-        dna.burnRate ? `Burn Rate: ${dna.burnRate}` : '',
-        dna.growthRate ? `Growth Rate: ${dna.growthRate}` : '',
         dna.teamSize ? `Team Size: ${dna.teamSize}` : '',
-        dna.primaryMarkets?.length ? `Markets: ${dna.primaryMarkets.join(', ')}` : '',
-        dna.customerType ? `Customer Type: ${dna.customerType}` : '',
-        dna.riskAppetite ? `Risk Appetite: ${dna.riskAppetite}` : '',
-        dna.aiPriority ? `AI Priority: ${dna.aiPriority}` : '',
         dna.goals?.length ? `Goals: ${dna.goals.join(', ')}` : '',
     ].filter(Boolean).join(' | ');
 }
@@ -289,20 +186,10 @@ export function dnaToUserParams(dna: BusinessDNA | null, overrides?: Record<stri
         companyDescription: dna.companyDescription,
         industry: dna.industry,
         companySize: dna.teamSize,
-        revenueRange: dna.annualRevenue,
-        riskTolerance: dna.riskAppetite,
-        geography: dna.primaryMarkets.join(', ') || 'Global',
-        primaryMarkets: dna.primaryMarkets.join(', '),
-        businessModel: dna.customerType ? `${dna.customerType} / ${dna.industry}` : dna.industry,
-        customerType: dna.customerType,
-        priority: dna.goals.join(', ') || 'Growth & Resilience',
+        teamSize: dna.teamSize,
+        geography: 'Global',
+        priority: dna.goals[0] || 'Growth & Resilience',
         goals: dna.goals.join(', '),
-        monthlySpend: dna.monthlySpend,
-        monthlyRevenue: dna.monthlyRevenue,
-        burnRate: dna.burnRate,
-        growthRate: dna.growthRate,
-        aiPriority: dna.aiPriority,
-        userRole: dna.userRole,
     } : {};
 
     return { ...base, ...(overrides ?? {}) };

@@ -73,24 +73,22 @@ export default function MorningBriefing() {
         return () => { cancelled = true; };
     }, []);
 
-    // Build legacy userParams shape from BusinessDNA
+    // Build userParams shape from simplified BusinessDNA
     const buildParams = useCallback(() => {
         if (!businessDNA) return null;
         return {
             companyName: businessDNA.companyName,
+            companyWebsite: businessDNA.companyWebsite,
             companyDescription: businessDNA.companyDescription,
             industry: businessDNA.industry,
             competitor: 'Fast-Growing Challenger',
-            priority: businessDNA.goals[0] || 'Aggressive Growth',
+            priority: businessDNA.goals[0] || 'Growth & Resilience',
+            goals: businessDNA.goals.join(', '),
             companySize: businessDNA.teamSize,
-            geography: businessDNA.primaryMarkets[0] || 'Global',
-            revenueRange: businessDNA.annualRevenue,
-            businessModel: businessDNA.customerType + ' / ' + businessDNA.industry,
-            growthStage: businessDNA.riskAppetite,
-            riskTolerance: businessDNA.riskAppetite,
+            teamSize: businessDNA.teamSize,
+            geography: 'Global',
             timeHorizon: 'Next 12 Months',
             primaryThreat: 'Technology Disruption',
-            aiPriority: businessDNA.aiPriority,
         };
     }, [businessDNA]);
 
@@ -136,7 +134,7 @@ export default function MorningBriefing() {
                             </h1>
                         </div>
                         <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--qs-gray-500)' }}>
-                            {businessDNA.industry} · {businessDNA.primaryMarkets[0] || 'Global'} · {businessDNA.riskAppetite}
+                            {businessDNA.industry}{businessDNA.teamSize ? ` · ${businessDNA.teamSize} team` : ''}{businessDNA.goals?.[0] ? ` · ${businessDNA.goals[0]}` : ''}
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -151,7 +149,7 @@ export default function MorningBriefing() {
                 <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="flex flex-col gap-4 pb-8">
                     <DashboardTabs data={data} />
                     <p className="text-center text-xs text-muted-foreground px-4">
-                        Generated {new Date(data.generated_at).toLocaleString()} · {data.company_name} · {businessDNA.industry} · {businessDNA.aiPriority}
+                        Generated {new Date(data.generated_at).toLocaleString()} · {data.company_name} · {businessDNA.industry}
                     </p>
                 </motion.div>
             </div>

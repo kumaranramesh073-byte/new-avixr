@@ -16,15 +16,15 @@ import {
 
 interface DNA {
     companyName?: string;
+    companyWebsite?: string;
+    companyDescription?: string;
     industry?: string;
+    teamSize?: string;
+    goals?: string[];
     primaryMarkets?: string[];
     riskAppetite?: string;
     aiPriority?: string;
     annualRevenue?: string;
-    monthlyRevenue?: string;
-    teamSize?: string;
-    customerType?: string;
-    goals?: string[];
 }
 
 export interface LatestSimulationSummary {
@@ -121,14 +121,14 @@ export default function HomeCommandCenter({
           impact: `Target markets: ${dna.primaryMarkets?.join(', ') || 'Not specified'}`, recommendation: 'Review Market Intel module for grounded sources', stage: 'Analyzing Market Conditions', angle: 162, depth: 0 },
         { key: 'competitor', icon: <Users size={16} />, label: 'Threat Index (Sim)', value: latestSimulation?.competitor_threat != null ? `${Math.round(latestSimulation.competitor_threat)}/100` : 'Not simulated', accent: '#DC2626', status: 'watch',
           impact: hasSim ? 'Simulated competitor threat level from last OCT run' : 'No simulation executed yet', recommendation: 'Run OCT Simulation to assess competitor pressure', stage: 'Loading Competitor Intelligence', angle: 18, depth: 1 },
-        { key: 'financial', icon: <BarChart3 size={16} />, label: 'Revenue Baseline', value: dna.monthlyRevenue || dna.annualRevenue || 'Not set', accent: '#0EA5E9', status: 'healthy',
-          impact: `Reported DNA scale: ${dna.annualRevenue || 'Unconfigured'}`, recommendation: 'Update Business DNA in Settings as metrics change', stage: 'Building Strategic Outcomes', angle: 205, depth: 1 },
-        { key: 'risk', icon: <Shield size={16} />, label: 'Volatility (Sim)', value: latestSimulation?.volatility_index != null ? `${Math.round(latestSimulation.volatility_index)}/100` : (dna.riskAppetite || 'Not set'), accent: '#D97706', status: 'watch',
-          impact: hasSim ? 'Simulated volatility index (not live market feed)' : `Configured risk appetite: ${dna.riskAppetite || 'Pending'}`, recommendation: 'Inspect Risk Center for scenario stress-tests', stage: 'Calculating Risk Exposure', angle: 335, depth: 0 },
+        { key: 'financial', icon: <BarChart3 size={16} />, label: 'Team Scale', value: dna.teamSize || 'Not set', accent: '#0EA5E9', status: 'healthy',
+          impact: `Configured organization size: ${dna.teamSize || 'Unconfigured'}`, recommendation: 'Update Business DNA in Settings as your team grows', stage: 'Building Strategic Outcomes', angle: 205, depth: 1 },
+        { key: 'risk', icon: <Shield size={16} />, label: 'Volatility (Sim)', value: latestSimulation?.volatility_index != null ? `${Math.round(latestSimulation.volatility_index)}/100` : (dna.riskAppetite || 'Not simulated'), accent: '#D97706', status: 'watch',
+          impact: hasSim ? 'Simulated volatility index (not live market feed)' : 'No simulation volatility score yet', recommendation: 'Inspect Risk Center for scenario stress-tests', stage: 'Calculating Risk Exposure', angle: 335, depth: 0 },
         { key: 'opportunity', icon: <Sparkles size={16} />, label: 'Strategic Goal', value: dna.goals?.[0] || 'Growth', accent: '#7C3AED', status: 'healthy',
           impact: `DNA objectives: ${dna.goals?.join(', ') || 'None selected'}`, recommendation: 'Align simulations with top strategic goal', stage: 'Generating Ripple Effects', angle: 240, depth: 1 },
-        { key: 'customer', icon: <Heart size={16} />, label: 'Customer Segment', value: dna.customerType || 'Not set', accent: '#16A34A', status: 'healthy',
-          impact: `Configured model: ${dna.customerType || 'Pending'}`, recommendation: 'Check Customer Sentiment module for analysis', stage: 'Reading Customer Sentiment', angle: 300, depth: 0 },
+        { key: 'customer', icon: <Heart size={16} />, label: 'Company Profile', value: dna.companyWebsite ? dna.companyWebsite.replace(/^https?:\/\//, '') : (dna.industry || 'Configured'), accent: '#16A34A', status: 'healthy',
+          impact: dna.companyDescription || `Sector context: ${dna.industry || 'Pending'}`, recommendation: 'Run modules to tailor AI recommendations to your Business DNA', stage: 'Reading Customer Sentiment', angle: 300, depth: 0 },
     ], [dna, hasSim, latestSimulation]);
 
     const pos = (angle: number) => {

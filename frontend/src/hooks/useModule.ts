@@ -21,15 +21,14 @@ function buildParams(dna: any): Record<string, string> | null {
     if (!dna) return null;
     return {
         companyName: dna.companyName,
-        companyDescription: dna.companyDescription,
+        companyWebsite: dna.companyWebsite || '',
+        companyDescription: dna.companyDescription || '',
         industry: dna.industry,
-        priority: dna.goals?.[0] || 'Aggressive Growth',
-        companySize: dna.teamSize,
-        geography: dna.primaryMarkets?.[0] || 'Global',
-        revenueRange: dna.annualRevenue,
-        businessModel: `${dna.customerType} / ${dna.industry}`,
-        riskTolerance: dna.riskAppetite,
-        aiPriority: dna.aiPriority,
+        priority: dna.goals?.[0] || 'Growth & Resilience',
+        goals: Array.isArray(dna.goals) ? dna.goals.join(', ') : '',
+        companySize: dna.teamSize || '',
+        teamSize: dna.teamSize || '',
+        geography: 'Global',
     };
 }
 
