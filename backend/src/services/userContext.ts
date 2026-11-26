@@ -8,7 +8,6 @@ import { supabaseAdmin } from '../middleware/auth.js';
 
 export interface BusinessDNA {
     id?: string;
-    organizationId?: string;
     userId?: string;
     companyName: string;
     companyWebsite: string;
@@ -39,7 +38,6 @@ function normalizeWebsite(v: unknown): string | null {
 function rowToDNA(row: Record<string, any>): BusinessDNA {
     return {
         id: row.id,
-        organizationId: row.organization_id,
         userId: row.user_id,
         companyName: asString(row.company_name),
         companyWebsite: asString(row.company_website),
@@ -51,14 +49,10 @@ function rowToDNA(row: Record<string, any>): BusinessDNA {
     };
 }
 
-export async function loadActiveBusinessDNA(
-    userId: string,
-    organizationId: string
-): Promise<BusinessDNA | null> {
+export async function loadActiveBusinessDNA(userId: string): Promise<BusinessDNA | null> {
     const { data, error } = await supabaseAdmin
         .from('business_dna_profiles')
-        .select('id, organization_id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
-        .eq('organization_id', organizationId)
+        .select('id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
@@ -75,7 +69,6 @@ export async function loadActiveBusinessDNA(
 
 export async function saveActiveBusinessDNA(
     userId: string,
-    organizationId: string,
     input: Partial<BusinessDNA>
 ): Promise<BusinessDNA> {
     const now = new Date().toISOString();
@@ -87,12 +80,11 @@ export async function saveActiveBusinessDNA(
 
     const goals = asStringArray(input.goals);
 
-    // Inspect existing active DNA profile(s) for this (org, user) so saving
+    // Inspect existing active DNA profile(s) for this user so saving
     // UPDATES the active profile in place instead of creating duplicate profiles.
     const { data: existingRows, error: listErr } = await supabaseAdmin
         .from('business_dna_profiles')
         .select('id')
-        .eq('organization_id', organizationId)
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('updated_at', { ascending: false });
@@ -116,7 +108,6 @@ export async function saveActiveBusinessDNA(
     }
 
     const dnaPayload = {
-        organization_id: organizationId,
         user_id: userId,
         company_name: companyName,
         company_website: normalizeWebsite(input.companyWebsite),
@@ -133,14 +124,13 @@ export async function saveActiveBusinessDNA(
             .from('business_dna_profiles')
             .update(dnaPayload)
             .eq('id', existingActiveId)
-            .eq('organization_id', organizationId)
             .eq('user_id', userId)
-            .select('id, organization_id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
+            .select('id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
             .single()
         : supabaseAdmin
             .from('business_dna_profiles')
             .insert(dnaPayload)
-            .select('id, organization_id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
+            .select('id, user_id, company_name, company_website, company_description, industry, team_size, goals, updated_at')
             .single();
 
     const { data, error } = await writeQuery;
@@ -152,11 +142,10 @@ export async function saveActiveBusinessDNA(
     return rowToDNA(data);
 }
 
-export async function deactivateActiveBusinessDNA(userId: string, organizationId: string): Promise<void> {
+export async function deactivateActiveBusinessDNA(userId: string): Promise<void> {
     const { error } = await supabaseAdmin
         .from('business_dna_profiles')
         .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('organization_id', organizationId)
         .eq('user_id', userId)
         .eq('is_active', true);
 

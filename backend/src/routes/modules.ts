@@ -52,7 +52,7 @@ modulesRouter.post('/:module/run', async (req: Request, res: Response) => {
     const userEmail = req.userEmail || 'unknown@qsimutron.com';
 
     const bodyParams = (req.body as { userParams?: Record<string, string> })?.userParams ?? {};
-    const persistedDNA = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
+    const persistedDNA = await loadActiveBusinessDNA(userId).catch(() => null);
     const mergedParams = dnaToUserParams(persistedDNA, bodyParams);
 
     if (!mergedParams.industry) {

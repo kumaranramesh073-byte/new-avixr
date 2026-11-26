@@ -43,7 +43,7 @@ agentsRouter.post('/:name/run', async (req: Request, res: Response) => {
     const organizationId = req.organizationId!;
 
     const baseQuery = query?.trim() || DEFAULT_QUERIES[agentName] || 'Provide a comprehensive enterprise intelligence analysis.';
-    const dna = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
+    const dna = await loadActiveBusinessDNA(userId).catch(() => null);
     const dnaCtx = formatDnaSummary(dna);
     const finalQuery = dnaCtx
         ? `${baseQuery}\n[Business DNA: ${dnaCtx}]`

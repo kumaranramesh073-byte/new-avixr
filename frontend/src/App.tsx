@@ -106,7 +106,14 @@ export default function App() {
                     <Route path="/preview-home" element={<CommandCenterPreview />} />
                     <Route path="/preview-think" element={
                         <HomeCommandCenter
-                            dna={{ companyName: 'Avixr Technologies', industry: 'Enterprise SaaS', primaryMarkets: ['North America'], riskAppetite: 'Balanced Growth', aiPriority: 'Operational Efficiency', annualRevenue: '$12M ARR' }}
+                            dna={{
+                                companyName: 'Avixr Technologies',
+                                companyWebsite: 'https://avixr.com',
+                                companyDescription: 'Enterprise decision intelligence and strategic simulation platform',
+                                industry: 'Enterprise SaaS',
+                                teamSize: '50–500',
+                                goals: ['Market Expansion'],
+                            }}
                             userName="Adrian" phase="running" onRun={() => {}} onResetDNA={() => {}}
                         />
                     } />

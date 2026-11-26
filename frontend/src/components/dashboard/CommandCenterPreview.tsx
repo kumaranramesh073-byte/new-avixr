@@ -23,11 +23,11 @@ export default function CommandCenterPreview() {
         <HomeCommandCenter
             dna={{
                 companyName: 'Avixr Technologies',
+                companyWebsite: 'https://avixr.com',
+                companyDescription: 'Enterprise decision intelligence and strategic simulation platform',
                 industry: 'Enterprise SaaS',
-                primaryMarkets: ['North America'],
-                riskAppetite: 'Balanced Growth',
-                aiPriority: 'Operational Efficiency',
-                annualRevenue: '$12M ARR',
+                teamSize: '50–500',
+                goals: ['Market Expansion', 'Risk Reduction'],
             }}
             userName="Adrian"
             phase={phase}

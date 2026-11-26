@@ -74,7 +74,7 @@ simulateRouter.post('/simulate-morning', async (req: Request, res: Response) => 
     const userEmail = req.userEmail || 'unknown@qsimutron.com';
 
     const rawBodyParams = (req.body as { userParams?: Partial<UserParams> })?.userParams ?? {};
-    const persistedDNA = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
+    const persistedDNA = await loadActiveBusinessDNA(userId).catch(() => null);
     const mergedParams = dnaToUserParams(persistedDNA, rawBodyParams as Record<string, string>);
 
     const userParams: UserParams = {

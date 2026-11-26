@@ -9,7 +9,7 @@
 --   - public.user_profiles (id, email, full_name, role, default_organization_id)
 --   - public.organizations (id, name, slug)
 --   - public.organization_memberships (id, organization_id, user_id, role)
---   - public.business_dna_profiles (minimal AI-relevant DNA: id, organization_id, user_id, company_name, company_website, company_description, industry, team_size, goals, is_active, created_at, updated_at)
+--   - public.business_dna_profiles (minimal AI-relevant DNA: id, user_id, company_name, company_website, company_description, industry, team_size, goals, is_active, created_at, updated_at)
 --   - public.sessions & public.simulation_steps
 --   - public.simulations (is_simulated, data_classification)
 --   - public.agent_outputs & public.agent_logs & public.query_history

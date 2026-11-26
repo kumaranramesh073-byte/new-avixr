@@ -16,7 +16,7 @@ authRouter.get('/me', async (req: Request, res: Response) => {
                 .select('id, email, full_name, role, default_organization_id, created_at')
                 .eq('id', userId)
                 .maybeSingle(),
-            loadActiveBusinessDNA(userId, organizationId),
+            loadActiveBusinessDNA(userId),
             getOrganizationPlan(organizationId),
         ]);
 

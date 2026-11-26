@@ -139,8 +139,7 @@ async function run() {
         const { data: dnaRows } = await sbAdmin
             .from('business_dna_profiles')
             .select('id, is_active')
-            .eq('user_id', testUserId)
-            .eq('organization_id', testOrgId);
+            .eq('user_id', testUserId);
         assert.equal(dnaRows?.length, 1, 'Expected exactly 1 DNA row after create+update');
         assert.equal(dnaRows?.[0]?.is_active, true);
         record('DNA Create/Update/No-Duplicates in Supabase', true, `id=${dnaId1}, activeRows=1`);

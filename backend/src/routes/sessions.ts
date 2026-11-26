@@ -69,7 +69,7 @@ sessionsRouter.post('/', async (req: Request, res: Response) => {
     // ── Intent Engine → Orchestrator Pipeline ──
     (async () => {
         try {
-            const dna = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
+            const dna = await loadActiveBusinessDNA(userId).catch(() => null);
             const dnaCtx = formatDnaSummary(dna);
             const enrichedQuery = dnaCtx ? `${query.trim()}\n[Business DNA Context: ${dnaCtx}]` : query.trim();
 
@@ -183,7 +183,7 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
     res.json({ message: 'Execution started', sessionId: session.id });
 
     (async () => {
-        const dna = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
+        const dna = await loadActiveBusinessDNA(userId).catch(() => null);
         const dnaCtx = formatDnaSummary(dna);
         const agentQuery = dnaCtx ? `${session.query}\n[Business DNA: ${dnaCtx}]` : session.query;
 

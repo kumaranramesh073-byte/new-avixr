@@ -8,14 +8,13 @@ import {
 
 export const dnaRouter = Router();
 
-// GET /api/dna — returns active Business DNA profile for current user & organization
+// GET /api/dna — returns active Business DNA profile for current user
 dnaRouter.get('/', async (req: Request, res: Response) => {
     try {
-        const dna = await loadActiveBusinessDNA(req.userId!, req.organizationId!);
+        const dna = await loadActiveBusinessDNA(req.userId!);
         return res.json({
             dna,
             onboardingComplete: !!dna,
-            organizationId: req.organizationId,
         });
     } catch (err: any) {
         console.error('[DNA] GET failed:', err.message);
@@ -23,7 +22,7 @@ dnaRouter.get('/', async (req: Request, res: Response) => {
     }
 });
 
-// PUT /api/dna — creates or replaces active Business DNA profile (enforces 1 active row per org+user)
+// PUT /api/dna — creates or replaces active Business DNA profile (enforces 1 active row per user)
 dnaRouter.put('/', async (req: Request, res: Response) => {
     try {
         const body = req.body as Partial<BusinessDNA>;
@@ -31,11 +30,10 @@ dnaRouter.put('/', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'companyName and industry are required' });
         }
 
-        const saved = await saveActiveBusinessDNA(req.userId!, req.organizationId!, body);
+        const saved = await saveActiveBusinessDNA(req.userId!, body);
         return res.json({
             dna: saved,
             onboardingComplete: true,
-            organizationId: req.organizationId,
         });
     } catch (err: any) {
         console.error('[DNA] PUT failed:', err.message);
@@ -46,7 +44,7 @@ dnaRouter.put('/', async (req: Request, res: Response) => {
 // DELETE /api/dna — deactivates active DNA profile (preserves historical rows)
 dnaRouter.delete('/', async (req: Request, res: Response) => {
     try {
-        await deactivateActiveBusinessDNA(req.userId!, req.organizationId!);
+        await deactivateActiveBusinessDNA(req.userId!);
         return res.json({ success: true, onboardingComplete: false });
     } catch (err: any) {
         console.error('[DNA] DELETE failed:', err.message);

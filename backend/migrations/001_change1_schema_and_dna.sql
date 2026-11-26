@@ -5,29 +5,16 @@
 -- Execute in Supabase SQL Editor.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ── 1. Business DNA Profiles (canonical company & AI DNA table) ─────────────
-ALTER TABLE public.business_dna_profiles
-    ADD COLUMN IF NOT EXISTS annual_revenue   TEXT,
-    ADD COLUMN IF NOT EXISTS risk_appetite    TEXT,
-    ADD COLUMN IF NOT EXISTS primary_markets  TEXT[] NOT NULL DEFAULT '{}',
-    ADD COLUMN IF NOT EXISTS customer_type    TEXT,
-    ADD COLUMN IF NOT EXISTS monthly_spend    TEXT,
-    ADD COLUMN IF NOT EXISTS monthly_revenue  TEXT,
-    ADD COLUMN IF NOT EXISTS burn_rate        NUMERIC,
-    ADD COLUMN IF NOT EXISTS growth_rate      NUMERIC,
-    ADD COLUMN IF NOT EXISTS ai_priority      TEXT,
-    ADD COLUMN IF NOT EXISTS user_role        TEXT;
-
--- Safely deactivate older duplicate active DNA rows (keeps only newest active per org+user)
+-- ── 1. Business DNA Profiles (minimal canonical AI Business DNA table) ───────
+-- Safely deactivate older duplicate active DNA rows (keeps only newest active per user)
 WITH ranked_dna AS (
     SELECT id,
            ROW_NUMBER() OVER (
-               PARTITION BY organization_id, user_id
+               PARTITION BY user_id
                ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
            ) AS rn
     FROM public.business_dna_profiles
     WHERE is_active = true
-      AND organization_id IS NOT NULL
       AND user_id IS NOT NULL
 )
 UPDATE public.business_dna_profiles b
@@ -37,13 +24,13 @@ FROM ranked_dna r
 WHERE b.id = r.id
   AND r.rn > 1;
 
--- Enforce at most ONE active DNA profile per (organization_id, user_id)
-CREATE UNIQUE INDEX IF NOT EXISTS uq_business_dna_active_org_user
-    ON public.business_dna_profiles (organization_id, user_id)
+-- Enforce at most ONE active DNA profile per user_id
+CREATE UNIQUE INDEX IF NOT EXISTS uq_business_dna_active_user
+    ON public.business_dna_profiles (user_id)
     WHERE is_active = true;
 
-CREATE INDEX IF NOT EXISTS idx_business_dna_org_user
-    ON public.business_dna_profiles (organization_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_business_dna_user
+    ON public.business_dna_profiles (user_id);
 
 -- ── 2. Sessions & Simulation Steps ──────────────────────────────────────────
 ALTER TABLE public.sessions

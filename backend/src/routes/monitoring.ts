@@ -234,30 +234,38 @@ monitoringRouter.get('/organizations', async (_req: Request, res: Response) => {
         const [orgsRes, memsRes, dnaRes] = await Promise.all([
             supabaseAdmin.from('organizations').select('*').order('created_at', { ascending: false }),
             supabaseAdmin.from('organization_memberships').select('organization_id, user_id, role'),
-            supabaseAdmin.from('business_dna_profiles').select('organization_id, company_name, industry, is_active').eq('is_active', true),
+            supabaseAdmin.from('business_dna_profiles').select('user_id, company_name, industry, is_active').eq('is_active', true),
         ]);
 
         if (orgsRes.error) return res.status(500).json({ error: orgsRes.error.message });
 
         const membersByOrg = new Map<string, number>();
+        const usersByOrg = new Map<string, string[]>();
         for (const m of memsRes.data ?? []) {
             membersByOrg.set(m.organization_id, (membersByOrg.get(m.organization_id) || 0) + 1);
+            const list = usersByOrg.get(m.organization_id) ?? [];
+            list.push(m.user_id);
+            usersByOrg.set(m.organization_id, list);
         }
 
-        const dnaByOrg = new Map<string, { companyName: string; industry: string }>();
+        const dnaByUser = new Map<string, { companyName: string; industry: string }>();
         for (const d of dnaRes.data ?? []) {
-            dnaByOrg.set(d.organization_id, { companyName: d.company_name, industry: d.industry });
+            dnaByUser.set(d.user_id, { companyName: d.company_name, industry: d.industry });
         }
 
-        const rows = (orgsRes.data ?? []).map(o => ({
-            id: o.id,
-            name: o.name,
-            slug: o.slug,
-            memberCount: membersByOrg.get(o.id) ?? 0,
-            activeCompany: dnaByOrg.get(o.id)?.companyName ?? null,
-            industry: dnaByOrg.get(o.id)?.industry ?? null,
-            createdAt: o.created_at,
-        }));
+        const rows = (orgsRes.data ?? []).map(o => {
+            const memberUserIds = usersByOrg.get(o.id) ?? [];
+            const matchedDna = memberUserIds.map(uid => dnaByUser.get(uid)).find(Boolean) ?? null;
+            return {
+                id: o.id,
+                name: o.name,
+                slug: o.slug,
+                memberCount: membersByOrg.get(o.id) ?? 0,
+                activeCompany: matchedDna?.companyName ?? null,
+                industry: matchedDna?.industry ?? null,
+                createdAt: o.created_at,
+            };
+        });
 
         return res.json(rows);
     } catch (err: any) {

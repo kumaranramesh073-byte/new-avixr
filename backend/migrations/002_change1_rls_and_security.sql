@@ -110,26 +110,23 @@ CREATE POLICY "org_memberships_select_self_or_org_admin" ON public.organization_
     FOR SELECT TO authenticated
     USING ((select auth.uid()) = user_id OR public.is_org_admin(organization_id) OR public.is_platform_admin());
 
--- ── 3. business_dna_profiles (strictly owner/org-member isolated) ───────────
+-- ── 3. business_dna_profiles (strictly owner isolated via user_id) ──────────
 DROP POLICY IF EXISTS "dna_select_org_member" ON public.business_dna_profiles;
-CREATE POLICY "dna_select_org_member" ON public.business_dna_profiles
+DROP POLICY IF EXISTS "dna_select_owner_or_admin" ON public.business_dna_profiles;
+CREATE POLICY "dna_select_owner_or_admin" ON public.business_dna_profiles
     FOR SELECT TO authenticated
-    USING (
-        ((select auth.uid()) = user_id AND public.is_org_member(organization_id))
-        OR public.is_org_admin(organization_id)
-        OR public.is_platform_admin()
-    );
+    USING ((select auth.uid()) = user_id OR public.is_platform_admin());
 
 DROP POLICY IF EXISTS "dna_insert_owner" ON public.business_dna_profiles;
 CREATE POLICY "dna_insert_owner" ON public.business_dna_profiles
     FOR INSERT TO authenticated
-    WITH CHECK ((select auth.uid()) = user_id AND public.is_org_member(organization_id));
+    WITH CHECK ((select auth.uid()) = user_id);
 
 DROP POLICY IF EXISTS "dna_update_owner" ON public.business_dna_profiles;
 CREATE POLICY "dna_update_owner" ON public.business_dna_profiles
     FOR UPDATE TO authenticated
-    USING ((select auth.uid()) = user_id AND public.is_org_member(organization_id))
-    WITH CHECK ((select auth.uid()) = user_id AND public.is_org_member(organization_id));
+    USING ((select auth.uid()) = user_id)
+    WITH CHECK ((select auth.uid()) = user_id);
 
 -- ── 4. Sessions, Simulation Steps, Simulations, Agent Outputs, Query History, Intelligence Feeds ──
 DROP POLICY IF EXISTS "sessions_select_owner_or_admin" ON public.sessions;
