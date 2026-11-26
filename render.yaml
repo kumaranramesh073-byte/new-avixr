@@ -1,0 +1,32 @@
+# Render blueprint — Q-SIMUTRON backend API (frontend deploys separately on Vercel)
+# Deploy: Render Dashboard → New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: q-simutron-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # LLM provider (Hugging Face router → Groq). Set HF_TOKEN as a secret in the dashboard.
+      - key: HF_TOKEN
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://router.huggingface.co/v1
+      - key: LLM_MODEL
+        value: meta-llama/Llama-3.3-70B-Instruct:groq
+      # Comma-separated allowed origins. *.vercel.app is always allowed automatically,
+      # but set your production domain here too once you have it.
+      - key: CORS_ORIGIN
+        sync: false
+      # Optional: deep-research provider.
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # Optional: live web search. Leave unset to run on synthesized intelligence.
+      - key: PERPLEXITY_API_KEY
+        sync: false

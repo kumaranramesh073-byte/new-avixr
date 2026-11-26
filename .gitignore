@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+.vercel/
+.next/
+out/
+coverage/
+.cache/
+.turbo/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Keys, Certificates, Databases & Secrets
+*.pem
+*.key
+*.pub
+*.cert
+*.pfx
+*.p12
+*.db
+*.db-shm
+*.db-wal
+*.sqlite*
+*credentials*.json
+*serviceAccount*.json
+
+# Sensitive files with hardcoded credentials/keys (excluded for security)
+backdoor/lib/api.ts
+backdoor/lib/auth-config.ts
+FETCH_HEAD
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+backend/dist/
+frontend/dist/
+start.bat

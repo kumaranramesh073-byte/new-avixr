@@ -1,0 +1,15 @@
+{
+    "name": "q-simutron",
+    "version": "1.0.0",
+    "description": "Q-Simutron: Enterprise-Grade Generative AI Platform",
+    "private": true,
+    "scripts": {
+        "build": "npm run build --prefix backend && npm run build --prefix frontend",
+        "start": "cd backend && npm install && npm run build && node dist/server.js",
+        "local": "npx concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+        "postinstall": "npm install --prefix backend && npm install --prefix frontend"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}

@@ -1,0 +1,192 @@
+/* ============================================================
+   Q-Simutron — Stacked product tour
+   Light page background with a large rounded NAVY CARD inside.
+   Each band pins (sticky) and its card slides up over the previous,
+   with light page showing around every card (white space).
+   Scoped CSS Module — no Tailwind, no global side-effects.
+   Mobile-first defaults = static stacked fallback.
+   ============================================================ */
+
+.section {
+  position: relative;
+  width: 100%;
+  background: #f5f5f7;
+}
+
+.band {
+  position: relative;
+  width: 100%;
+}
+
+/* The visible coloured product-tour container */
+.panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 40px;
+  width: calc(100% - 32px);
+  max-width: 1800px;
+  margin: 20px auto;
+  min-height: auto;
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding: 40px 28px 48px;
+}
+
+/* ---- Panel colour themes ---- */
+.theme1 { background: #000b1e; color: #ffffff; }
+.theme2 { background: #0066ff; color: #ffffff; }
+.theme3 { background: #ffffff; color: #0c1322; border: 1px solid rgba(12, 19, 34, 0.08); }
+.theme4 { background: #0a1430; color: #ffffff; }
+
+/* ---- Left: text ---- */
+.text {
+  position: relative;
+  z-index: 2;
+}
+.index {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin-bottom: 20px;
+}
+.index::before {
+  content: "";
+  width: 32px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.7;
+}
+.title {
+  font-size: clamp(2.4rem, 5.5vw, 4.8rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  margin: 0;
+  color: inherit;
+}
+.tagline {
+  margin: 20px 0 0;
+  font-size: clamp(1.02rem, 1.4vw, 1.28rem);
+  line-height: 1.45;
+  max-width: 34ch;
+  opacity: 0.72;
+  color: inherit;
+}
+
+/* ---- Right: image ---- */
+.visual {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.image {
+  width: 100%;
+  max-width: 760px;
+  height: auto;
+  border-radius: 18px;
+  display: block;
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transform: translateZ(0);
+  will-change: transform;
+}
+.theme3 .image {
+  border-color: rgba(12, 19, 34, 0.08);
+  box-shadow: 0 40px 90px -34px rgba(20, 40, 90, 0.35);
+}
+
+/* ---- Footer brand label ---- */
+.brand {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+}
+.brandDot {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(150deg, #3a8bff, #0a4bff);
+  flex: none;
+}
+
+/* ============================================================
+   DESKTOP — pinned, contained card floating on the light page
+   ============================================================ */
+@media (min-width: 769px) {
+  .band {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .panel {
+    width: calc(100% - 64px);
+    max-width: 1800px;
+    min-height: 86vh;
+    height: 86vh;
+    margin: 0 auto;
+    box-shadow: 0 50px 110px -40px rgba(15, 30, 70, 0.45);
+  }
+
+  .inner {
+    display: grid;
+    grid-template-columns: 1fr 1.05fr;
+    align-items: center;
+    column-gap: 56px;
+    height: 100%;
+    padding: clamp(48px, 5vw, 72px);
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+  }
+
+  .brand {
+    position: absolute;
+    left: clamp(48px, 5vw, 72px);
+    bottom: clamp(40px, 5vh, 56px);
+    margin-top: 0;
+  }
+}
+
+/* ============================================================
+   REDUCED MOTION — static stacked cards (no pin / no animation)
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .band {
+    position: relative;
+    top: auto;
+    height: auto;
+    display: block;
+  }
+  .panel {
+    height: auto;
+    min-height: auto;
+  }
+  .image {
+    transform: none !important;
+    will-change: auto;
+  }
+}

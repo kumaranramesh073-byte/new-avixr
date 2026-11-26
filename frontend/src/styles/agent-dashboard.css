@@ -1,0 +1,511 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Qsimutron — Professional Resume Theme
+   A minimalist, high-typography theme inspired by executive resumes.
+   Uses Serif for headers and clean Sans-serif for data.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+    /* Professional Palette — Quantum AI Inspired Dark Mode */
+    --qs-blue: #3b82f6;
+    --qs-blue-light: #60a5fa;
+    --qs-accent: #10b981;
+    /* Glowing Green */
+
+    --qs-gray-50: #0f172a;
+    /* Main dark canvas */
+    --qs-gray-100: #1e293b;
+    /* Cards / panels */
+    --qs-gray-200: #334155;
+    /* Subtle borders */
+    --qs-gray-300: #475569;
+    --qs-gray-400: #64748b;
+    --qs-gray-500: #94a3b8;
+    /* Secondary text */
+    --qs-gray-600: #cbd5e1;
+    --qs-gray-700: #e2e8f0;
+    --qs-gray-800: #f1f5f9;
+    --qs-gray-900: #f8fafc;
+    /* Primary pure text */
+
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+
+    --font-primary: 'Outfit', sans-serif;
+    --font-serif: 'Outfit', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --sidebar-width: 64px;
+    --topbar-height: 56px;
+}
+
+body {
+    background: var(--qs-gray-50);
+    color: var(--qs-gray-800);
+    font-family: var(--font-primary);
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Typography ───────────────────────────────────────────────────────────── */
+
+h1,
+h2,
+h3,
+h4 {
+    font-family: var(--font-primary);
+    font-weight: 700;
+    color: var(--qs-gray-900);
+    letter-spacing: -0.01em;
+}
+
+/* ── Dashboard Layout ─────────────────────────────────────────────────────── */
+
+.agent-dashboard {
+    min-height: 100vh;
+    padding-bottom: 60px;
+    background: var(--qs-gray-50);
+}
+
+.agent-dash-header-detailed {
+    background: var(--qs-gray-100) !important;
+    border-bottom: 1px solid var(--qs-gray-200) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.agent-dash-header {
+    padding: 32px 28px 24px;
+    background: var(--qs-gray-100);
+    border-bottom: 1px solid var(--qs-gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.agent-dash-header h1 {
+    font-size: 28px;
+    margin: 0;
+}
+
+.breadcrumb {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--qs-gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 6px;
+}
+
+.header-meta {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: var(--qs-gray-500);
+}
+
+.header-meta strong {
+    color: var(--qs-gray-800);
+    font-weight: 600;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+
+.agent-dash-tabs {
+    padding: 0 28px;
+    background: var(--qs-gray-100);
+    border-bottom: 1px solid var(--qs-gray-200);
+    display: flex;
+    gap: 32px;
+}
+
+.agent-dash-tab {
+    padding: 16px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--qs-gray-500);
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.2s;
+    letter-spacing: 0.02em;
+}
+
+.agent-dash-tab:hover {
+    color: var(--qs-gray-800);
+}
+
+.agent-dash-tab.active {
+    color: var(--qs-blue-light);
+}
+
+.agent-dash-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--qs-blue-light);
+    box-shadow: 0 -2px 10px var(--qs-blue);
+}
+
+/* ── KPI Cards ────────────────────────────────────────────────────────────── */
+
+.kpi-row {
+    display: grid;
+    gap: 20px;
+    padding: 24px 28px;
+}
+
+.kpi-row-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.kpi-row-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.kpi-card {
+    background: var(--qs-gray-100);
+    padding: 24px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--qs-gray-200);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    border-color: var(--qs-gray-300);
+}
+
+.kpi-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--qs-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+}
+
+.kpi-value {
+    font-family: var(--font-primary);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--qs-gray-900);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.kpi-delta {
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+.kpi-delta.positive {
+    color: var(--qs-accent);
+}
+
+/* ── Panels & Layout ──────────────────────────────────────────────────────── */
+
+.dash-panel {
+    background: var(--qs-gray-100);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--qs-gray-200);
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dash-panel-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--qs-gray-200);
+    font-family: var(--font-primary);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--qs-gray-900);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+
+.dash-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.dash-table th {
+    text-align: left;
+    padding: 16px 24px;
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--qs-gray-500);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--qs-gray-200);
+}
+
+.dash-table td {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--qs-gray-200);
+    color: var(--qs-gray-700);
+}
+
+.dash-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.dash-table .link {
+    color: var(--qs-blue-light);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.dash-table .link:hover {
+    text-decoration: underline;
+}
+
+/* ── Charts ───────────────────────────────────────────────────────────────── */
+
+.dash-chart {
+    padding: 24px 20px;
+    position: relative;
+    min-height: 160px;
+}
+
+.chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 100%;
+    min-height: 120px;
+}
+
+.chart-bar {
+    width: 100%;
+    border-radius: 1px 1px 0 0;
+    transition: all 0.3s;
+}
+
+.chart-bar.primary {
+    background: var(--qs-blue);
+}
+
+.chart-bar.secondary {
+    background: var(--qs-gray-300);
+}
+
+.chart-bar.accent {
+    background: var(--qs-accent);
+}
+
+.chart-bar:hover {
+    filter: brightness(1.1);
+}
+
+.chart-legend {
+    display: flex;
+    gap: 16px;
+    padding: 12px 20px;
+    background: var(--qs-gray-50);
+    border-top: 1px solid var(--qs-gray-100);
+}
+
+.chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--qs-gray-500);
+}
+
+.chart-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 1px;
+}
+
+/* ── Buttons & Badges ──────────────────────────────────────────────────────── */
+
+.dash-btn {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: none;
+}
+
+.dash-btn-primary {
+    background: var(--qs-blue);
+    color: white;
+}
+
+.dash-btn-primary:hover {
+    background: var(--qs-gray-900);
+}
+
+.dash-btn-outline {
+    background: white;
+    color: var(--qs-gray-700);
+    border: 1px solid var(--qs-gray-200);
+}
+
+.dash-btn-outline:hover {
+    border-color: var(--qs-gray-400);
+    background: var(--qs-gray-50);
+}
+
+.dash-badge {
+    padding: 2px 8px;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 10px;
+    text-transform: uppercase;
+}
+
+.dash-badge.open {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.dash-badge.closed {
+    background: var(--qs-gray-100);
+    color: var(--qs-gray-500);
+}
+
+/* ── Progress ─────────────────────────────────────────────────────────────── */
+
+.dash-progress {
+    width: 100%;
+    height: 6px;
+    background: var(--qs-gray-100);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.dash-progress-fill {
+    height: 100%;
+    background: var(--qs-blue);
+    border-radius: 3px;
+}
+
+/* ── Risk Indicators ──────────────────────────────────────────────────────── */
+
+.risk-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 2px;
+    font-weight: 800;
+    font-size: 10px;
+    color: white;
+}
+
+.risk-dot.high {
+    background: #dc2626;
+}
+
+.risk-dot.medium {
+    background: #d97706;
+}
+
+.risk-dot.low {
+    background: #16a34a;
+}
+
+/* ── Sidebar Alerts ────────────────────────────────────────────────────────── */
+
+.dash-alerts-sidebar {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--qs-gray-100) !important;
+    border-color: var(--qs-gray-200) !important;
+}
+
+.alert-item {
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.2) !important;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--qs-gray-200);
+}
+
+.alert-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--qs-gray-800);
+    margin-bottom: 6px;
+}
+
+.alert-meta {
+    font-size: 11px;
+    color: var(--qs-gray-500);
+    line-height: 1.5;
+}
+
+.alert-links {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.alert-links a {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--qs-blue-light);
+    cursor: pointer;
+}
+
+/* ── Agent Report (Markdown) ──────────────────────────────────────────────── */
+
+.agent-report-content {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--qs-gray-700);
+}
+
+.agent-report-content h1,
+.agent-report-content h2,
+.agent-report-content h3 {
+    font-family: var(--font-serif);
+    color: var(--qs-gray-900);
+}
+
+.agent-report-content table {
+    margin: 20px 0;
+    border: 1px solid var(--qs-gray-100);
+}
+
+.agent-report-content th {
+    background: var(--qs-gray-50);
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
