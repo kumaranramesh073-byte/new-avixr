@@ -55,9 +55,11 @@ async function apiFetch(path, options = {}, token) {
 
 async function run() {
     const results = [];
-    const record = (name, ok, detail) => {
-        results.push({ name, ok, detail });
-        console.log(`${ok ? 'PASS' : 'FAIL'} | ${name} — ${detail}`);
+    const record = (name, statusOrOk, detail) => {
+        const status = typeof statusOrOk === 'boolean' ? (statusOrOk ? 'pass' : 'fail') : statusOrOk;
+        results.push({ name, status, detail });
+        const label = status === 'pass' ? 'PASS' : status === 'skip' ? 'SKIP' : 'FAIL';
+        console.log(`${label} | ${name} — ${detail}`);
     };
 
     // 1. Backend Health
@@ -115,7 +117,12 @@ async function run() {
         }
         record('Normal User Denied Admin Endpoints (403)', true, '4/4 endpoints returned 403');
 
-        // 4. Business DNA Persistence (Create -> Retrieve -> Update in place -> Verify 1 active row)
+        // 4. Business DNA Persistence (Empty GET -> Create -> GET Retrieve -> Update in place -> Schema Check -> Soft Deactivate)
+        const getDnaInitial = await apiFetch('/api/dna', {}, userToken);
+        assert.equal(getDnaInitial.status, 200);
+        assert.equal(getDnaInitial.json.dna, null);
+        assert.equal(getDnaInitial.json.onboardingComplete, false);
+
         const dnaInput = {
             companyName: 'E2E Verification Corp',
             companyWebsite: 'https://avixr-e2e.example.org',
@@ -126,7 +133,20 @@ async function run() {
         };
         const putDna1 = await apiFetch('/api/dna', { method: 'PUT', body: JSON.stringify(dnaInput) }, userToken);
         assert.equal(putDna1.status, 200);
+        assert.equal(putDna1.json.onboardingComplete, true);
         const dnaId1 = putDna1.json.dna.id;
+
+        const getDnaCreated = await apiFetch('/api/dna', {}, userToken);
+        assert.equal(getDnaCreated.status, 200);
+        assert.equal(getDnaCreated.json.onboardingComplete, true);
+        assert.equal(getDnaCreated.json.dna.id, dnaId1);
+        assert.equal(getDnaCreated.json.dna.companyName, dnaInput.companyName);
+        assert.equal(getDnaCreated.json.dna.companyWebsite, dnaInput.companyWebsite);
+        assert.equal(getDnaCreated.json.dna.companyDescription, dnaInput.companyDescription);
+        assert.equal(getDnaCreated.json.dna.industry, dnaInput.industry);
+        assert.equal(getDnaCreated.json.dna.teamSize, dnaInput.teamSize);
+        assert.deepEqual(getDnaCreated.json.dna.goals, dnaInput.goals);
+        assert.equal('organizationId' in getDnaCreated.json.dna, false, 'Minimal DNA response must not expose organizationId');
 
         const putDna2 = await apiFetch('/api/dna', {
             method: 'PUT',
@@ -136,13 +156,24 @@ async function run() {
         assert.equal(putDna2.json.dna.id, dnaId1, 'Updating DNA must update existing active row in place without duplicates');
         assert.equal(putDna2.json.dna.teamSize, '50–500');
 
+        const getDnaUpdated = await apiFetch('/api/dna', {}, userToken);
+        assert.equal(getDnaUpdated.status, 200);
+        assert.equal(getDnaUpdated.json.dna.id, dnaId1);
+        assert.equal(getDnaUpdated.json.dna.teamSize, '50–500');
+        assert.deepEqual(getDnaUpdated.json.dna.goals, ['Revenue Growth', 'Cost Reduction']);
+
         const { data: dnaRows } = await sbAdmin
             .from('business_dna_profiles')
-            .select('id, is_active')
+            .select('*')
             .eq('user_id', testUserId);
         assert.equal(dnaRows?.length, 1, 'Expected exactly 1 DNA row after create+update');
         assert.equal(dnaRows?.[0]?.is_active, true);
-        record('DNA Create/Update/No-Duplicates in Supabase', true, `id=${dnaId1}, activeRows=1`);
+        assert.deepEqual(
+            Object.keys(dnaRows[0]).sort(),
+            ['company_description', 'company_name', 'company_website', 'created_at', 'goals', 'id', 'industry', 'is_active', 'team_size', 'updated_at', 'user_id'],
+            'Live business_dna_profiles row must have strictly the 11 minimal columns'
+        );
+        record('DNA Create/Retrieve/Update/Minimal-Schema in Supabase', true, `id=${dnaId1}, cols=11, activeRows=1`);
 
         // 5. Sessions Persistence (Create -> Get -> Patch -> Delete -> Confirm Only Intended Row Deleted)
         const sessCreate = await apiFetch('/api/sessions', {
@@ -189,6 +220,25 @@ async function run() {
             auth: { autoRefreshToken: false, persistSession: false },
             realtime: { transport: ws },
         });
+
+        // 7a. business_dna_profiles RLS isolation for primary user
+        const { data: userVisibleDna, error: userDnaErr } = await sbUser
+            .from('business_dna_profiles')
+            .select('id, user_id, company_name');
+        assert.ifError(userDnaErr);
+        assert.equal(userVisibleDna?.length, 1, `User must see ONLY their 1 own DNA row via RLS (got ${userVisibleDna?.length})`);
+        assert.equal(userVisibleDna?.[0]?.user_id, testUserId);
+
+        const { error: spoofDnaErr } = await sbUser
+            .from('business_dna_profiles')
+            .insert({
+                user_id: 'f90de9d1-1bcc-4e1f-8924-36558bfa18a2',
+                company_name: 'RLS Spoof Attempt',
+                industry: 'SaaS',
+                goals: [],
+            });
+        assert.ok(spoofDnaErr, 'Authenticated user must be blocked by RLS from inserting DNA with another user_id');
+
         const { data: logsAsUser, error: logsErr } = await sbUser.from('agent_logs').select('id').limit(5);
         assert.equal((logsAsUser ?? []).length, 0, `Standard user must see 0 rows in agent_logs (got ${logsAsUser?.length}, err=${logsErr?.message})`);
 
@@ -201,14 +251,62 @@ async function run() {
         const { data: unverifiedNewsAsUser } = await sbUser.from('news_articles').select('id').eq('is_verified', false).limit(5);
         assert.equal((unverifiedNewsAsUser ?? []).length, 0, 'Standard user must not read unverified news via direct RLS');
 
-        // Anon client must see 0 rows on protected tables
+        // Anon client must see 0 rows on protected tables including business_dna_profiles
         const sbPureAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
             auth: { autoRefreshToken: false, persistSession: false },
             realtime: { transport: ws },
         });
+        const { data: anonDna } = await sbPureAnon.from('business_dna_profiles').select('id').limit(5);
+        assert.equal((anonDna ?? []).length, 0, 'Anonymous user must see 0 rows in business_dna_profiles');
         const { data: anonProfiles } = await sbPureAnon.from('user_profiles').select('id').limit(5);
         assert.equal((anonProfiles ?? []).length, 0, 'Anonymous user must see 0 rows in user_profiles');
-        record('RLS Isolation Verified (User vs Admin & Anon)', true, 'All sensitive/admin tables blocked for standard user & anon');
+
+        // Cross-user isolation check with a secondary temporary user
+        const testUser2Email = `avixr.e2e.user2.${ts}@avixr-test.local`;
+        const { data: createdUser2, error: cu2Err } = await sbAdmin.auth.admin.createUser({
+            email: testUser2Email,
+            password: testUserPass,
+            email_confirm: true,
+            user_metadata: { full_name: 'E2E Secondary User' },
+        });
+        if (cu2Err || !createdUser2.user) throw new Error(`Failed creating secondary test user: ${cu2Err?.message}`);
+        const testUser2Id = createdUser2.user.id;
+        try {
+            const { data: u2SignIn, error: u2Err } = await sbAnon.auth.signInWithPassword({
+                email: testUser2Email,
+                password: testUserPass,
+            });
+            if (u2Err || !u2SignIn.session) throw new Error(`Secondary user sign-in failed: ${u2Err?.message}`);
+            const sbUser2 = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                global: { headers: { Authorization: `Bearer ${u2SignIn.session.access_token}` } },
+                auth: { autoRefreshToken: false, persistSession: false },
+                realtime: { transport: ws },
+            });
+            const { data: u2CrossRead } = await sbUser2.from('business_dna_profiles').select('id').eq('id', dnaId1);
+            assert.equal((u2CrossRead ?? []).length, 0, 'Secondary user must NOT read primary user DNA via RLS');
+            const { data: u2CrossUpd } = await sbUser2.from('business_dna_profiles').update({ company_name: 'Hacked' }).eq('id', dnaId1).select('id');
+            assert.equal((u2CrossUpd ?? []).length, 0, 'Secondary user must NOT update primary user DNA via RLS');
+        } finally {
+            await sbAdmin.from('business_dna_profiles').delete().eq('user_id', testUser2Id);
+            await sbAdmin.from('user_profiles').delete().eq('id', testUser2Id);
+            await sbAdmin.auth.admin.deleteUser(testUser2Id);
+        }
+        record('RLS Isolation Verified (DNA Cross-User + Spoof + Anon + Admin Tables)', true, 'All DNA & admin tables isolated');
+
+        // 7b. DNA Soft-Deactivation via DELETE /api/dna (non-destructive)
+        const delDna = await apiFetch('/api/dna', { method: 'DELETE' }, userToken);
+        assert.equal(delDna.status, 200);
+        assert.equal(delDna.json.onboardingComplete, false);
+        const getDnaAfterDel = await apiFetch('/api/dna', {}, userToken);
+        assert.equal(getDnaAfterDel.status, 200);
+        assert.equal(getDnaAfterDel.json.dna, null);
+        const { data: dnaAfterDelRow } = await sbAdmin
+            .from('business_dna_profiles')
+            .select('id, is_active')
+            .eq('id', dnaId1)
+            .single();
+        assert.equal(dnaAfterDelRow?.is_active, false, 'DELETE /api/dna must deactivate without deleting row');
+        record('DNA Soft Deactivation (DELETE /api/dna Preserves Row)', true, `id=${dnaId1}, is_active=false`);
 
         // 8. Admin Login + Monitoring + News Validation tests (if ADMIN_EMAIL & ADMIN_PASSWORD provided)
         if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
@@ -237,7 +335,8 @@ async function run() {
             assert.equal(badNews.status, 400, 'Placeholder URL must return 400');
             record('Admin Monitoring & News Placeholder Rejection', true, 'All monitoring endpoints 200; placeholder rejected 400');
         } else {
-            record('Admin Monitoring & News Validation Live Check', false, 'SKIPPED: ADMIN_EMAIL / ADMIN_PASSWORD not set');
+            const requireAdmin = process.env.REQUIRE_ADMIN_E2E === 'true';
+            record('Admin Monitoring & News Validation Live Check', requireAdmin ? 'fail' : 'skip', 'SKIPPED: ADMIN_EMAIL / ADMIN_PASSWORD not set');
         }
     } finally {
         // Cleanup ONLY the temporary E2E test user & org created by this script
@@ -252,9 +351,11 @@ async function run() {
         await sbAdmin.auth.admin.deleteUser(testUserId);
     }
 
-    const failed = results.filter(r => !r.ok);
-    console.log(`\nSummary: ${results.length - failed.length}/${results.length} passed.`);
-    process.exit(failed.length > 0 ? 1 : 0);
+    const passed = results.filter(r => r.status === 'pass').length;
+    const skipped = results.filter(r => r.status === 'skip').length;
+    const failed = results.filter(r => r.status === 'fail').length;
+    console.log(`\nSummary: ${passed}/${results.length} passed, ${skipped} skipped, ${failed} failed.`);
+    process.exit(failed > 0 ? 1 : 0);
 }
 
 run().catch((err) => {
