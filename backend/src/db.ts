@@ -193,6 +193,40 @@ export const db = {
         return (data ?? []).map(mapSession);
     },
 
+    async updateSession(
+        id: string,
+        userId: string,
+        organizationId: string,
+        patch: { query?: string; agentMode?: string; status?: SessionStatus }
+    ): Promise<SessionRow | undefined> {
+        const updatePayload: Record<string, unknown> = {
+            updated_at: new Date().toISOString(),
+        };
+        if (typeof patch.query === 'string' && patch.query.trim()) {
+            updatePayload.query = patch.query.trim();
+        }
+        if (typeof patch.agentMode === 'string' && patch.agentMode.trim()) {
+            updatePayload.agent_mode = patch.agentMode.trim();
+        }
+        if (patch.status) {
+            updatePayload.status = patch.status;
+        }
+
+        const { data, error } = await supabaseAdmin
+            .from('sessions')
+            .update(updatePayload)
+            .eq('id', id)
+            .eq('user_id', userId)
+            .eq('organization_id', organizationId)
+            .select('*')
+            .maybeSingle();
+
+        if (error) {
+            throw new Error(`Failed to update session: ${error.message}`);
+        }
+        return data ? mapSession(data) : undefined;
+    },
+
     async deleteSession(id: string, userId: string, organizationId: string): Promise<boolean> {
         // Delete child steps first to respect FK constraints
         await supabaseAdmin

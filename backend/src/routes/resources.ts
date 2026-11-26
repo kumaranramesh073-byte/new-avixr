@@ -96,6 +96,69 @@ resourcesRouter.get('/data-sources', async (req: Request, res: Response) => {
     }
 });
 
+resourcesRouter.post('/data-sources', async (req: Request, res: Response) => {
+    try {
+        const { name, type, region, status } = req.body as {
+            name?: string;
+            type?: string;
+            region?: string;
+            status?: string;
+        };
+        if (!name?.trim() || !type?.trim()) {
+            return res.status(400).json({ error: 'name and type are required' });
+        }
+
+        const safeStatus = status === 'connected' || status === 'Connected' ? 'connected' : 'disconnected';
+        const { data, error } = await supabaseAdmin
+            .from('data_source_configs')
+            .insert({
+                organization_id: req.organizationId!,
+                name: name.trim(),
+                source_type: type.trim(),
+                status: safeStatus,
+                record_count: 0,
+                metadata: { region: (region || 'Custom').trim() },
+            })
+            .select('id, name, source_type, status, record_count, last_sync_at, error_message, metadata')
+            .single();
+
+        if (error || !data) {
+            return res.status(500).json({ error: error?.message || 'Failed to save data source' });
+        }
+
+        return res.status(201).json({
+            id: data.id,
+            name: data.name,
+            type: data.source_type,
+            records: String(data.record_count ?? 0),
+            status: data.status === 'connected' ? 'Connected' : 'Disconnected',
+            health: data.status === 'connected' ? 100 : 0,
+            lastSync: data.last_sync_at ? new Date(data.last_sync_at).toISOString() : 'Never',
+            region: (data.metadata as Record<string, unknown>)?.region || 'Custom',
+            configured: true,
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+resourcesRouter.delete('/data-sources/:id', async (req: Request, res: Response) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('data_source_configs')
+            .delete()
+            .eq('id', req.params.id)
+            .eq('organization_id', req.organizationId!)
+            .select('id');
+
+        if (error) return res.status(500).json({ error: error.message });
+        if (!data || data.length === 0) return res.status(404).json({ error: 'Data source not found' });
+        return res.json({ deleted: true, id: req.params.id });
+    } catch (err: any) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
 resourcesRouter.get('/models', (_req, res) => res.json(MODELS));
 resourcesRouter.get('/suites', (_req, res) => res.json(SUITES));
 resourcesRouter.get('/architecture', (_req, res) => res.json(ARCH_SECTIONS));

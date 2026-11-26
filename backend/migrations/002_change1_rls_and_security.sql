@@ -56,6 +56,34 @@ ALTER TABLE public.simulations                  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.uploaded_files               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_profiles                ENABLE ROW LEVEL SECURITY;
 
+-- ── Drop legacy/overly-permissive policies on all 29 managed public tables ──
+-- PostgreSQL OR-combines permissive policies, so legacy `true` / `auth.role()`
+-- policies (such as old unrestricted `agent_logs` read access) MUST be removed
+-- before applying least-privilege Change 1 policies.
+DO $$
+DECLARE
+    pol RECORD;
+BEGIN
+    FOR pol IN
+        SELECT schemaname, tablename, policyname
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename IN (
+              'agent_knowledge', 'agent_logs', 'agent_outputs', 'alerts_notifications',
+              'background_news_jobs', 'billing_subscriptions', 'business_dna_profiles',
+              'company_info', 'competitor_intelligence', 'data_source_configs',
+              'intelligence_feeds', 'legal_consent_history', 'legal_consent_records',
+              'llm_requests', 'news_articles', 'notification_delivery_records',
+              'notification_preferences', 'notifications', 'organization_memberships',
+              'organizations', 'payment_transactions', 'payment_webhook_events',
+              'profiles', 'query_history', 'sessions', 'simulation_steps',
+              'simulations', 'uploaded_files', 'user_profiles'
+          )
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', pol.policyname, pol.schemaname, pol.tablename);
+    END LOOP;
+END $$;
+
 -- ── 1. user_profiles (self read; self update WITHOUT role escalation; admin read) ──
 DROP POLICY IF EXISTS "user_profiles_select_self_or_admin" ON public.user_profiles;
 CREATE POLICY "user_profiles_select_self_or_admin" ON public.user_profiles

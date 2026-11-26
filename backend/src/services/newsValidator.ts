@@ -77,12 +77,24 @@ const MAX_ARTICLE_AGE_DAYS = 90;
 export function decodeHtmlEntitiesAndStripTags(input: string | null | undefined): string {
     if (!input) return '';
     let text = input
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;|&apos;/g, "'")
-        .replace(/&nbsp;/g, ' ');
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&amp;/gi, '&')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;|&rsquo;|&lsquo;/gi, "'")
+        .replace(/&ldquo;|&rdquo;/gi, '"')
+        .replace(/&mdash;/gi, '—')
+        .replace(/&ndash;/gi, '–')
+        .replace(/&hellip;/gi, '...')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&#(\d+);/g, (_m, dec) => {
+            const code = Number(dec);
+            return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : '';
+        })
+        .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => {
+            const code = parseInt(hex, 16);
+            return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : '';
+        });
     text = text.replace(/<[^>]*>/g, ' ');
     return text.replace(/\s+/g, ' ').trim();
 }

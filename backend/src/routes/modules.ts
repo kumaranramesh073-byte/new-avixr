@@ -129,6 +129,7 @@ modulesRouter.post('/:module/run', async (req: Request, res: Response) => {
         });
 
         await supabaseAdmin.from('llm_requests').insert({
+            organization_id: organizationId,
             user_id: userId,
             user_email: userEmail,
             company: mergedParams.companyName || 'Unknown',

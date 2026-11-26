@@ -15,9 +15,9 @@ import { broadcast, broadcastError } from '../ws.js';
 import { supabaseAdmin } from '../middleware/auth.js';
 import {
     loadActiveBusinessDNA,
+    formatDnaSummary,
     logAgentActivity,
     saveAgentOutput,
-    type BusinessDNA,
 } from '../services/userContext.js';
 
 // Agents — Original
@@ -43,21 +43,6 @@ import { recordFeedback } from '../engines/feedbackLoop.js';
 import type { OrchestrationPlan } from '../agentTypes.js';
 
 export const sessionsRouter = Router();
-
-function formatDnaContext(dna: BusinessDNA | null): string {
-    if (!dna) return '';
-    return [
-        `Company: ${dna.companyName} (${dna.industry})`,
-        dna.companyDescription ? `Description: ${dna.companyDescription}` : '',
-        dna.annualRevenue ? `Annual Revenue: ${dna.annualRevenue}` : '',
-        dna.teamSize ? `Team Size: ${dna.teamSize}` : '',
-        dna.primaryMarkets?.length ? `Markets: ${dna.primaryMarkets.join(', ')}` : '',
-        dna.customerType ? `Customer Type: ${dna.customerType}` : '',
-        dna.riskAppetite ? `Risk Appetite: ${dna.riskAppetite}` : '',
-        dna.aiPriority ? `AI Priority: ${dna.aiPriority}` : '',
-        dna.goals?.length ? `Goals: ${dna.goals.join(', ')}` : '',
-    ].filter(Boolean).join(' | ');
-}
 
 // ─── POST /api/sessions ───────────────────────────────────────────────────────
 
@@ -85,7 +70,7 @@ sessionsRouter.post('/', async (req: Request, res: Response) => {
     (async () => {
         try {
             const dna = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
-            const dnaCtx = formatDnaContext(dna);
+            const dnaCtx = formatDnaSummary(dna);
             const enrichedQuery = dnaCtx ? `${query.trim()}\n[Business DNA Context: ${dnaCtx}]` : query.trim();
 
             const intent = await classifyIntent(enrichedQuery);
@@ -199,7 +184,7 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
 
     (async () => {
         const dna = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
-        const dnaCtx = formatDnaContext(dna);
+        const dnaCtx = formatDnaSummary(dna);
         const agentQuery = dnaCtx ? `${session.query}\n[Business DNA: ${dnaCtx}]` : session.query;
 
         const agentOutputs: Record<string, unknown>[] = [];
@@ -335,13 +320,13 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
             const decisionScore = await scoreDecision(session.query, agentOutputs, simulationResult.summary);
 
             // Persist orchestrated simulation record
-            await supabaseAdmin.from('simulations').insert({
+            const simInsert: Record<string, unknown> = {
                 organization_id: organizationId,
                 user_id: userId,
                 session_id: session.id,
                 simulation_type: 'orchestrated_session',
                 title: session.query.slice(0, 120),
-                user_params: dna ? { companyName: dna.companyName, industry: dna.industry } : {},
+                user_params: dna ? { companyName: dna.companyName, industry: dna.industry, userRole: dna.userRole } : {},
                 system_stability: simulationResult.systemStability,
                 composite_score: decisionScore.compositeScore,
                 decision_rank: decisionScore.rank,
@@ -351,7 +336,17 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
                     decisionScore,
                     is_simulated: true,
                 },
+            };
+            const { error: simErr } = await supabaseAdmin.from('simulations').insert({
+                ...simInsert,
+                is_simulated: true,
+                data_classification: 'AI_SIMULATION',
             });
+            if (simErr && (simErr.code === 'PGRST204' || /column .* does not exist/i.test(simErr.message))) {
+                await supabaseAdmin.from('simulations').insert(simInsert);
+            } else if (simErr) {
+                console.error('[Sessions] Failed to persist orchestrated simulation:', simErr.message);
+            }
 
             broadcast(session.id, 'session_done', {
                 totalSteps: steps.length,
@@ -382,6 +377,31 @@ sessionsRouter.post('/:id/execute', async (req: Request, res: Response) => {
         await db.markSessionError(session.id);
         broadcastError(session.id, 'Orchestration execution failed unexpectedly.');
     });
+});
+
+// ─── PATCH /api/sessions/:id ─────────────────────────────────────────────────
+
+sessionsRouter.patch('/:id', async (req: Request, res: Response) => {
+    try {
+        const { query, agentMode, status } = req.body as {
+            query?: string;
+            agentMode?: string;
+            status?: 'planning' | 'ready' | 'executing' | 'done' | 'error';
+        };
+        if (query === undefined && agentMode === undefined && status === undefined) {
+            return res.status(400).json({ error: 'Provide at least one field to update (query, agentMode, status)' });
+        }
+
+        const updated = await db.updateSession(req.params.id, req.userId!, req.organizationId!, {
+            query,
+            agentMode,
+            status,
+        });
+        if (!updated) return res.status(404).json({ error: 'Session not found' });
+        return res.json(updated);
+    } catch (err: any) {
+        return res.status(500).json({ error: err.message });
+    }
 });
 
 // ─── DELETE /api/sessions/:id ────────────────────────────────────────────────

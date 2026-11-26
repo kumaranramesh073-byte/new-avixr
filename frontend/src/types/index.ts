@@ -157,6 +157,7 @@ export interface Session {
 // ─── Data Source ──────────────────────────────────────────────────────────
 
 export interface DataSource {
+  id?: string;
   name: string;
   type: string;
   records: string;
@@ -164,6 +165,7 @@ export interface DataSource {
   health: number;
   lastSync: string;
   region: string;
+  configured?: boolean;
 }
 
 // ─── ML Model ─────────────────────────────────────────────────────────────

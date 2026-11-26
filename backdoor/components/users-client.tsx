@@ -40,6 +40,7 @@ export type MonitoredUser = {
   id: string;
   name: string;
   email: string;
+  role?: string;
   company: string;
   plan: string;
   requests: number;
@@ -204,6 +205,7 @@ export function UsersClient({ users }: { users: MonitoredUser[] }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead><Sortable col="name" label="User" /></TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Plan</TableHead>
                     <TableHead>Status</TableHead>
@@ -216,7 +218,7 @@ export function UsersClient({ users }: { users: MonitoredUser[] }) {
                 <TableBody>
                   {displayed.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={9} className="py-12 text-center text-sm text-muted-foreground">
                         No users match the current filters.
                       </TableCell>
                     </TableRow>
@@ -224,11 +226,24 @@ export function UsersClient({ users }: { users: MonitoredUser[] }) {
                   {displayed.map((u) => {
                     const statusMeta = STATUS_META[u.status] || STATUS_META.active;
                     const StatusIcon = statusMeta.icon;
+                    const userRole = u.role || "user";
                     return (
                       <TableRow key={u.id}>
                         <TableCell>
                           <div className="font-medium text-sm">{u.name}</div>
                           <div className="text-xs text-muted-foreground">{u.email}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={
+                              userRole === "superadmin" || userRole === "admin"
+                                ? "border-violet-200 bg-violet-50 text-violet-700 text-[10px] uppercase"
+                                : "border-slate-200 bg-slate-50 text-slate-600 text-[10px] uppercase"
+                            }
+                          >
+                            {userRole}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-sm">{u.company}</TableCell>
                         <TableCell>

@@ -255,3 +255,20 @@ researchRouter.get('/:id', async (req: Request, res: Response) => {
         error: data.error_message,
     });
 });
+
+// ─── DELETE /api/research/:id ────────────────────────────────────────────────
+
+researchRouter.delete('/:id', async (req: Request, res: Response) => {
+    const { data, error } = await supabaseAdmin
+        .from('intelligence_feeds')
+        .delete()
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId!)
+        .eq('organization_id', req.organizationId!)
+        .select('id');
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data || data.length === 0) return res.status(404).json({ error: 'Research session not found' });
+    activeRuns.delete(req.params.id);
+    return res.json({ deleted: true, id: req.params.id });
+});

@@ -47,7 +47,6 @@ interface AuthState {
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3100/api';
-const DNA_KEY = 'qsimutron_dna';
 
 function userFromSupabase(
     sbUser: { id: string; email?: string; user_metadata?: Record<string, string> },
@@ -88,17 +87,6 @@ async function fetchBackendProfile(): Promise<{
     }
 }
 
-function readCachedDNA(): { dna: BusinessDNA | null; complete: boolean } {
-    try {
-        const raw = localStorage.getItem(DNA_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            return { dna: parsed.dna ?? null, complete: !!parsed.complete };
-        }
-    } catch { /* ignore */ }
-    return { dna: null, complete: false };
-}
-
 export const useAuthStore = create<AuthState>((set) => ({
     user: null,
     isLoading: true,
@@ -106,8 +94,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     businessDNA: null,
 
     initialize: () => {
-        const cached = readCachedDNA();
-
         supabase.auth.getSession().then(async ({ data }) => {
             const sbUser = data.session?.user;
             if (!sbUser) {
@@ -116,11 +102,8 @@ export const useAuthStore = create<AuthState>((set) => ({
             }
 
             const profile = await fetchBackendProfile();
-            const dna = profile?.dna ?? cached.dna;
-            const complete = profile ? profile.onboardingComplete : cached.complete;
-            if (profile?.dna) {
-                localStorage.setItem(DNA_KEY, JSON.stringify({ complete, dna: profile.dna }));
-            }
+            const dna = profile?.dna ?? null;
+            const complete = !!profile?.onboardingComplete;
 
             set({
                 user: userFromSupabase(sbUser, profile?.role, profile?.organizationId),
@@ -130,12 +113,9 @@ export const useAuthStore = create<AuthState>((set) => ({
             });
         });
 
-        supabase.auth.onAuthStateChange(async (event, session) => {
+        supabase.auth.onAuthStateChange(async (_event, session) => {
             const sbUser = session?.user;
             if (!sbUser) {
-                if (event === 'SIGNED_OUT') {
-                    localStorage.removeItem(DNA_KEY);
-                }
                 set({ user: null, businessDNA: null, onboardingComplete: false });
                 return;
             }
@@ -154,9 +134,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         if (error) throw new Error(error.message);
         if (!data.user) throw new Error('No user returned');
         const profile = await fetchBackendProfile();
-        if (profile?.dna) {
-            localStorage.setItem(DNA_KEY, JSON.stringify({ complete: profile.onboardingComplete, dna: profile.dna }));
-        }
         set({
             user: userFromSupabase(data.user, profile?.role, profile?.organizationId),
             businessDNA: profile?.dna ?? null,
@@ -198,7 +175,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     logout: async () => {
         await supabase.auth.signOut();
-        localStorage.removeItem(DNA_KEY);
         set({ user: null, businessDNA: null, onboardingComplete: false });
     },
 
@@ -214,18 +190,18 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
         const saved = await res.json();
         const persistedDna: BusinessDNA = saved.dna ?? dna;
-        localStorage.setItem(DNA_KEY, JSON.stringify({ complete: true, dna: persistedDna }));
         set({ onboardingComplete: true, businessDNA: persistedDna });
     },
 
     resetOnboarding: async () => {
-        try {
-            await fetch(`${API_BASE}/dna`, {
-                method: 'DELETE',
-                headers: await getAuthHeaders(),
-            });
-        } catch { /* ignore network errors during reset */ }
-        localStorage.removeItem(DNA_KEY);
+        const res = await fetch(`${API_BASE}/dna`, {
+            method: 'DELETE',
+            headers: await getAuthHeaders(),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+            throw new Error(err.error || 'Failed to reset Business DNA');
+        }
         set({ onboardingComplete: false, businessDNA: null });
     },
 }));

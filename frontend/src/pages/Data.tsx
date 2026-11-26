@@ -4,7 +4,7 @@ import { Database, Activity, RefreshCw, Filter, Search, X, Check, AlertCircle, I
 import { DATA_SOURCES as INITIAL_SOURCES } from '../data/constants';
 import type { DataSource } from '../types';
 import { useToastStore } from '../store/toastStore';
-import { fetchDataSources } from '../api/client';
+import { fetchDataSources, createDataSource, deleteDataSource } from '../api/client';
 
 export default function Data() {
     const [sources, setSources] = useState<DataSource[]>(INITIAL_SOURCES);
@@ -36,27 +36,36 @@ export default function Data() {
         });
     }, [sources, searchQuery, filterStatus]);
 
-    const handleAddSource = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleAddSource = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
-        const newSource: DataSource = {
-            name: formData.get('name') as string,
-            type: formData.get('type') as string,
-            records: '0',
-            status: 'Connected',
-            health: 100,
-            lastSync: 'Just now',
-            region: formData.get('region') as string,
-        };
-        setSources([newSource, ...sources]);
-        setShowAddModal(false);
-        addToast('Data source integrated successfully', 'success');
+        const name = String(formData.get('name') || '').trim();
+        const type = String(formData.get('type') || '').trim();
+        const region = String(formData.get('region') || 'Custom').trim();
+        try {
+            const created = await createDataSource({ name, type, region, status: 'disconnected' });
+            const savedSource = created as unknown as DataSource;
+            setSources([savedSource, ...sources.filter(s => s.configured !== false)]);
+            setShowAddModal(false);
+            addToast('Data source saved to Supabase', 'success');
+        } catch (err: any) {
+            addToast(err?.message || 'Failed to save data source', 'error');
+        }
     };
 
-    const handleDeleteSource = (sourceName: string) => {
-        setSources(sources.filter(s => s.name !== sourceName));
-        setSelectedSource(null);
-        addToast(`Source "${sourceName}" archived`, 'info');
+    const handleDeleteSource = async (source: DataSource) => {
+        if (!source.id) {
+            addToast('Default unconfigured catalog items cannot be deleted', 'info');
+            return;
+        }
+        try {
+            await deleteDataSource(source.id);
+            setSources(sources.filter(s => s.id !== source.id));
+            setSelectedSource(null);
+            addToast(`Source "${source.name}" deleted from Supabase`, 'info');
+        } catch (err: any) {
+            addToast(err?.message || 'Failed to delete data source', 'error');
+        }
     };
 
     return (
@@ -145,8 +154,8 @@ export default function Data() {
                 {[
                     { label: 'Connected Sources', value: sources.filter(s => s.status === 'Connected').length.toString(), icon: <Database size={16} />, color: 'var(--qs-blue)' },
                     { label: 'Active Syncs', value: sources.filter(s => s.status === 'Syncing').length.toString(), icon: <RefreshCw size={16} />, color: 'var(--qs-green)' },
-                    { label: 'Total Records', value: '112.4M', icon: <Activity size={16} />, color: 'var(--qs-gray-700)' },
-                    { label: 'Average Uptime', value: '99.98%', icon: <Activity size={16} />, color: 'var(--qs-blue)' },
+                    { label: 'Total Records', value: sources.reduce((sum, s) => sum + (Number(s.records) || 0), 0).toLocaleString(), icon: <Activity size={16} />, color: 'var(--qs-gray-700)' },
+                    { label: 'Average Health', value: sources.some(s => s.configured) ? `${Math.round(sources.filter(s => s.configured).reduce((sum, s) => sum + s.health, 0) / Math.max(1, sources.filter(s => s.configured).length))}%` : 'Unconfigured', icon: <Activity size={16} />, color: 'var(--qs-blue)' },
                 ].map((stat, i) => (
                     <div key={i} className="card card-body" style={{ padding: '16px 20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--qs-gray-400)', marginBottom: 8 }}>
@@ -369,7 +378,7 @@ export default function Data() {
                                 <button
                                     className="btn btn-secondary"
                                     style={{ padding: '8px 20px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--qs-red)' }}
-                                    onClick={() => handleDeleteSource(selectedSource.name)}
+                                    onClick={() => handleDeleteSource(selectedSource)}
                                 >
                                     <Trash2 size={14} /> Archive Source
                                 </button>

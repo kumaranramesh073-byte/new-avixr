@@ -172,30 +172,48 @@ simulateRouter.post('/simulate-morning', async (req: Request, res: Response) => 
         };
 
         // Persist simulation to Supabase `simulations`
-        const { data: simRow, error: simErr } = await supabaseAdmin
+        const simBasePayload: Record<string, unknown> = {
+            organization_id: organizationId,
+            user_id: userId,
+            simulation_type: 'morning_briefing',
+            title: `${companyName} — OCT Simulation`,
+            user_params: mergedParams,
+            market_score,
+            competitor_threat,
+            volatility_index,
+            system_stability: vanguardOutput.stability_score,
+            composite_score: market_score,
+            decision_rank: blackrockOutput.risk_category,
+            summary: bloombergOutput.headline,
+            results: response,
+            mermaid_graph_code: blackrockOutput.mermaid_graph_code,
+        };
+
+        let { data: simRow, error: simErr } = await supabaseAdmin
             .from('simulations')
             .insert({
-                organization_id: organizationId,
-                user_id: userId,
-                simulation_type: 'morning_briefing',
-                title: `${companyName} — OCT Simulation`,
-                user_params: mergedParams,
-                market_score,
-                competitor_threat,
-                volatility_index,
-                system_stability: vanguardOutput.stability_score,
-                composite_score: market_score,
-                decision_rank: blackrockOutput.risk_category,
-                summary: bloombergOutput.headline,
-                results: response,
-                mermaid_graph_code: blackrockOutput.mermaid_graph_code,
+                ...simBasePayload,
+                is_simulated: true,
+                data_classification: 'AI_SIMULATION',
             })
             .select('id')
             .single();
 
+        if (simErr && (simErr.code === 'PGRST204' || /column .* does not exist/i.test(simErr.message))) {
+            const fallbackRes = await supabaseAdmin
+                .from('simulations')
+                .insert(simBasePayload)
+                .select('id')
+                .single();
+            simRow = fallbackRes.data;
+            simErr = fallbackRes.error;
+        }
+
         if (simErr) {
-            console.warn('[Simulate] Failed to persist simulation:', simErr.message);
-        } else if (simRow?.id) {
+            console.error('[Simulate] Failed to persist simulation:', simErr.message);
+            return res.status(500).json({ error: `Simulation generated but database persistence failed: ${simErr.message}` });
+        }
+        if (simRow?.id) {
             response.simulation_id = simRow.id;
         }
 
@@ -265,6 +283,7 @@ simulateRouter.post('/simulate-morning', async (req: Request, res: Response) => 
         });
 
         await supabaseAdmin.from('llm_requests').insert({
+            organization_id: organizationId,
             user_id: userId,
             user_email: userEmail,
             company: userParams.companyName || userParams.industry || 'Unknown',

@@ -97,6 +97,126 @@ export default function Settings() {
                                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                                 />
                             </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Your Role</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.userRole || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, userRole: e.target.value })}
+                                    placeholder="e.g. Founder, CEO, CTO"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Annual Revenue</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.annualRevenue || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, annualRevenue: e.target.value })}
+                                    placeholder="e.g. $1M – $10M"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Team Size</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.teamSize || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, teamSize: e.target.value })}
+                                    placeholder="e.g. 10–50"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Risk Appetite</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.riskAppetite || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, riskAppetite: e.target.value })}
+                                    placeholder="Conservative / Balanced / Aggressive"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Customer Type</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.customerType || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, customerType: e.target.value })}
+                                    placeholder="B2B / B2C / Hybrid"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">AI Priority</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.aiPriority || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, aiPriority: e.target.value })}
+                                    placeholder="Profitability / Fast Growth / Innovation"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Primary Markets (comma-separated)</label>
+                                <input
+                                    type="text"
+                                    value={(dnaForm.primaryMarkets || []).join(', ')}
+                                    onChange={e => setDnaForm({ ...dnaForm, primaryMarkets: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                                    placeholder="India, United States, Europe"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Strategic Goals (comma-separated)</label>
+                                <input
+                                    type="text"
+                                    value={(dnaForm.goals || []).join(', ')}
+                                    onChange={e => setDnaForm({ ...dnaForm, goals: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                                    placeholder="Revenue Growth, Cost Reduction"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Monthly Spend</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.monthlySpend || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, monthlySpend: e.target.value })}
+                                    placeholder="e.g. $50K"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Monthly Revenue</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.monthlyRevenue || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, monthlyRevenue: e.target.value })}
+                                    placeholder="e.g. $120K"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Burn Rate (numeric)</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.burnRate || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, burnRate: e.target.value })}
+                                    placeholder="e.g. 50"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Growth Rate % (numeric)</label>
+                                <input
+                                    type="text"
+                                    value={dnaForm.growthRate || ''}
+                                    onChange={e => setDnaForm({ ...dnaForm, growthRate: e.target.value })}
+                                    placeholder="e.g. 20"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
                         </div>
                         <div className="flex justify-end pt-2">
                             <button

@@ -18,6 +18,7 @@ import { executeOptimizer } from '../agents/optimizer.js';
 import { executeInfoRetrieval } from '../agents/infoRetrieval.js';
 import {
     loadActiveBusinessDNA,
+    formatDnaSummary,
     logAgentActivity,
     saveAgentOutput,
 } from '../services/userContext.js';
@@ -43,8 +44,9 @@ agentsRouter.post('/:name/run', async (req: Request, res: Response) => {
 
     const baseQuery = query?.trim() || DEFAULT_QUERIES[agentName] || 'Provide a comprehensive enterprise intelligence analysis.';
     const dna = await loadActiveBusinessDNA(userId, organizationId).catch(() => null);
-    const finalQuery = dna
-        ? `${baseQuery}\n[Business DNA: Company=${dna.companyName}, Industry=${dna.industry}, Markets=${dna.primaryMarkets.join(',') || 'Global'}, RiskAppetite=${dna.riskAppetite || 'Balanced'}, Goals=${dna.goals.join(',')}]`
+    const dnaCtx = formatDnaSummary(dna);
+    const finalQuery = dnaCtx
+        ? `${baseQuery}\n[Business DNA: ${dnaCtx}]`
         : baseQuery;
 
     const step: OrchestrationStep = {

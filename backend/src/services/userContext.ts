@@ -39,6 +39,22 @@ function asString(v: unknown, fallback = ''): string {
     return String(v);
 }
 
+function parseOptionalMetric(v: unknown): number | null {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    const cleaned = String(v).replace(/[%$,\s]/g, '').trim();
+    if (!cleaned) return null;
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : null;
+}
+
+function normalizeWebsite(v: unknown): string | null {
+    const raw = asString(v).trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `https://${raw}`;
+}
+
 function rowToDNA(row: Record<string, any>): BusinessDNA {
     const meta = (row.metadata && typeof row.metadata === 'object' ? row.metadata : {}) as Record<string, unknown>;
     return {
@@ -105,30 +121,42 @@ export async function saveActiveBusinessDNA(
 
     const goals = asStringArray(input.goals);
     const primaryMarkets = asStringArray(input.primaryMarkets);
-    const burnRateNum = input.burnRate !== undefined && input.burnRate !== '' && !Number.isNaN(Number(input.burnRate))
-        ? Number(input.burnRate)
-        : null;
-    const growthRateNum = input.growthRate !== undefined && input.growthRate !== '' && !Number.isNaN(Number(input.growthRate))
-        ? Number(input.growthRate)
-        : null;
+    const burnRateNum = parseOptionalMetric(input.burnRate);
+    const growthRateNum = parseOptionalMetric(input.growthRate);
 
-    // Deactivate any previously active DNA profiles for this (org, user) so only ONE active row exists
-    const { error: deactErr } = await supabaseAdmin
+    // Inspect existing active DNA profile(s) for this (org, user) so saving
+    // UPDATES the active profile in place instead of creating duplicate profiles.
+    const { data: existingRows, error: listErr } = await supabaseAdmin
         .from('business_dna_profiles')
-        .update({ is_active: false, updated_at: now })
+        .select('id')
         .eq('organization_id', organizationId)
         .eq('user_id', userId)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false });
 
-    if (deactErr) {
-        throw new Error(`Failed to deactivate prior DNA profile: ${deactErr.message}`);
+    if (listErr) {
+        throw new Error(`Failed to inspect existing Business DNA: ${listErr.message}`);
+    }
+
+    const activeList = existingRows ?? [];
+    const existingActiveId = activeList[0]?.id as string | undefined;
+
+    if (activeList.length > 1) {
+        const extraIds = activeList.slice(1).map((r: { id: string }) => r.id);
+        const { error: deactErr } = await supabaseAdmin
+            .from('business_dna_profiles')
+            .update({ is_active: false, updated_at: now })
+            .in('id', extraIds);
+        if (deactErr) {
+            throw new Error(`Failed to deactivate duplicate DNA profiles: ${deactErr.message}`);
+        }
     }
 
     const basePayload = {
         organization_id: organizationId,
         user_id: userId,
         company_name: companyName,
-        company_website: asString(input.companyWebsite).trim() || null,
+        company_website: normalizeWebsite(input.companyWebsite),
         company_description: asString(input.companyDescription).trim() || null,
         industry,
         team_size: asString(input.teamSize).trim() || null,
@@ -153,11 +181,22 @@ export async function saveActiveBusinessDNA(
         metadata: {},
     };
 
-    const { data, error } = await supabaseAdmin
-        .from('business_dna_profiles')
-        .insert(structuredPayload)
-        .select('*')
-        .single();
+    const writeQuery = existingActiveId
+        ? supabaseAdmin
+            .from('business_dna_profiles')
+            .update(structuredPayload)
+            .eq('id', existingActiveId)
+            .eq('organization_id', organizationId)
+            .eq('user_id', userId)
+            .select('*')
+            .single()
+        : supabaseAdmin
+            .from('business_dna_profiles')
+            .insert(structuredPayload)
+            .select('*')
+            .single();
+
+    const { data, error } = await writeQuery;
 
     if (!error && data) {
         return rowToDNA(data);
@@ -167,25 +206,35 @@ export async function saveActiveBusinessDNA(
     // store extended fields in metadata temporarily without losing data.
     if (error && (error.code === 'PGRST204' || /column .* does not exist/i.test(error.message))) {
         console.warn('[DNA] Structured DNA columns missing — run backend/migrations/001_change1_schema_and_dna.sql. Falling back to metadata.');
-        const { data: fbData, error: fbErr } = await supabaseAdmin
-            .from('business_dna_profiles')
-            .insert({
-                ...basePayload,
-                metadata: {
-                    annualRevenue: asString(input.annualRevenue).trim(),
-                    riskAppetite: asString(input.riskAppetite).trim(),
-                    primaryMarkets,
-                    customerType: asString(input.customerType).trim(),
-                    monthlySpend: asString(input.monthlySpend).trim(),
-                    monthlyRevenue: asString(input.monthlyRevenue).trim(),
-                    burnRate: asString(input.burnRate).trim(),
-                    growthRate: asString(input.growthRate).trim(),
-                    aiPriority: asString(input.aiPriority).trim(),
-                    userRole: asString(input.userRole).trim(),
-                },
-            })
-            .select('*')
-            .single();
+        const fallbackPayload = {
+            ...basePayload,
+            metadata: {
+                annualRevenue: asString(input.annualRevenue).trim(),
+                riskAppetite: asString(input.riskAppetite).trim(),
+                primaryMarkets,
+                customerType: asString(input.customerType).trim(),
+                monthlySpend: asString(input.monthlySpend).trim(),
+                monthlyRevenue: asString(input.monthlyRevenue).trim(),
+                burnRate: asString(input.burnRate).trim(),
+                growthRate: asString(input.growthRate).trim(),
+                aiPriority: asString(input.aiPriority).trim(),
+                userRole: asString(input.userRole).trim(),
+            },
+        };
+        const fbQuery = existingActiveId
+            ? supabaseAdmin
+                .from('business_dna_profiles')
+                .update(fallbackPayload)
+                .eq('id', existingActiveId)
+                .select('*')
+                .single()
+            : supabaseAdmin
+                .from('business_dna_profiles')
+                .insert(fallbackPayload)
+                .select('*')
+                .single();
+
+        const { data: fbData, error: fbErr } = await fbQuery;
 
         if (fbErr || !fbData) {
             throw new Error(`Failed to save Business DNA: ${fbErr?.message ?? 'unknown error'}`);
@@ -207,6 +256,27 @@ export async function deactivateActiveBusinessDNA(userId: string, organizationId
     if (error) {
         throw new Error(`Failed to reset Business DNA: ${error.message}`);
     }
+}
+
+export function formatDnaSummary(dna: BusinessDNA | null): string {
+    if (!dna) return '';
+    return [
+        `Company: ${dna.companyName} (${dna.industry})`,
+        dna.userRole ? `Role: ${dna.userRole}` : '',
+        dna.companyWebsite ? `Website: ${dna.companyWebsite}` : '',
+        dna.companyDescription ? `Description: ${dna.companyDescription}` : '',
+        dna.annualRevenue ? `Annual Revenue: ${dna.annualRevenue}` : '',
+        dna.monthlyRevenue ? `Monthly Revenue: ${dna.monthlyRevenue}` : '',
+        dna.monthlySpend ? `Monthly Spend: ${dna.monthlySpend}` : '',
+        dna.burnRate ? `Burn Rate: ${dna.burnRate}` : '',
+        dna.growthRate ? `Growth Rate: ${dna.growthRate}` : '',
+        dna.teamSize ? `Team Size: ${dna.teamSize}` : '',
+        dna.primaryMarkets?.length ? `Markets: ${dna.primaryMarkets.join(', ')}` : '',
+        dna.customerType ? `Customer Type: ${dna.customerType}` : '',
+        dna.riskAppetite ? `Risk Appetite: ${dna.riskAppetite}` : '',
+        dna.aiPriority ? `AI Priority: ${dna.aiPriority}` : '',
+        dna.goals?.length ? `Goals: ${dna.goals.join(', ')}` : '',
+    ].filter(Boolean).join(' | ');
 }
 
 /**
@@ -265,13 +335,28 @@ export async function logAgentActivity(params: {
     sessionId?: string;
     metadata?: Record<string, unknown>;
 }): Promise<void> {
-    const payload: Record<string, unknown> = {
+    const basePayload: Record<string, unknown> = {
         agent_type: params.agentType,
         action: params.action,
         status: params.status,
     };
 
-    const { error } = await supabaseAdmin.from('agent_logs').insert(payload);
+    const fullPayload: Record<string, unknown> = {
+        ...basePayload,
+        ...(params.organizationId ? { organization_id: params.organizationId } : {}),
+        ...(params.userId ? { user_id: params.userId } : {}),
+        ...(params.sessionId ? { session_id: params.sessionId } : {}),
+        ...(params.metadata ? { metadata: params.metadata } : {}),
+    };
+
+    const { error } = await supabaseAdmin.from('agent_logs').insert(fullPayload);
+    if (error && (error.code === 'PGRST204' || /column .* does not exist/i.test(error.message))) {
+        const { error: fbErr } = await supabaseAdmin.from('agent_logs').insert(basePayload);
+        if (fbErr) {
+            console.warn('[AgentLogs] Failed to insert log:', fbErr.message);
+        }
+        return;
+    }
     if (error) {
         console.warn('[AgentLogs] Failed to insert log:', error.message);
     }

@@ -67,7 +67,7 @@ export function OperationsClient({
         <TabsList className="flex flex-wrap">
           <TabsTrigger value="orgs">Organizations ({organizations.length})</TabsTrigger>
           <TabsTrigger value="activity">
-            Sessions & Agents ({activity.sessions.length + activity.simulations.length})
+            Sessions & Agents ({activity.sessions.length + activity.simulations.length + activity.agentOutputs.length})
           </TabsTrigger>
           <TabsTrigger value="logs">Agent Logs ({activity.agentLogs.length})</TabsTrigger>
           <TabsTrigger value="news">News & Validation ({news.articles.length})</TabsTrigger>
@@ -186,6 +186,45 @@ export function OperationsClient({
                         <TableCell>{sim.decision_rank || "—"}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {relativeTime(sim.created_at)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Agent Outputs</CardTitle>
+              <CardDescription>Persisted outputs from public.agent_outputs</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {activity.agentOutputs.length === 0 ? (
+                <EmptyState label="No agent outputs recorded in Supabase yet." />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Agent</TableHead>
+                      <TableHead>Module</TableHead>
+                      <TableHead>Query</TableHead>
+                      <TableHead>Confidence</TableHead>
+                      <TableHead>Latency</TableHead>
+                      <TableHead>Created</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activity.agentOutputs.map((out) => (
+                      <TableRow key={out.id}>
+                        <TableCell className="font-medium">{out.agent_name}</TableCell>
+                        <TableCell>{out.module_name || "—"}</TableCell>
+                        <TableCell className="max-w-sm truncate">{out.query}</TableCell>
+                        <TableCell>{out.confidence_score != null ? `${out.confidence_score}%` : "—"}</TableCell>
+                        <TableCell>{out.execution_time_ms ? `${out.execution_time_ms}ms` : "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {relativeTime(out.created_at)}
                         </TableCell>
                       </TableRow>
                     ))}

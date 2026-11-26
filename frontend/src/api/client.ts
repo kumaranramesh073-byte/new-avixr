@@ -80,12 +80,51 @@ export async function deleteSession(sessionId: string): Promise<void> {
     if (!res.ok) throw new Error(`Delete session failed: ${res.status}`);
 }
 
+export async function updateSession(
+    sessionId: string,
+    patch: { query?: string; agentMode?: string; status?: string }
+): Promise<Record<string, unknown>> {
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: await getHeaders(),
+        body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error(`Update session failed: ${res.status}`);
+    return res.json();
+}
+
 // ─── Resource APIs ────────────────────────────────────────────────────────────
 
 export async function fetchDataSources(): Promise<Record<string, unknown>[]> {
     const res = await fetch(`${API_BASE}/data-sources`, { headers: await getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch data sources');
     return res.json();
+}
+
+export async function createDataSource(payload: {
+    name: string;
+    type: string;
+    region?: string;
+    status?: string;
+}): Promise<Record<string, unknown>> {
+    const res = await fetch(`${API_BASE}/data-sources`, {
+        method: 'POST',
+        headers: await getHeaders(),
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to save data source' }));
+        throw new Error(err.error || 'Failed to save data source');
+    }
+    return res.json();
+}
+
+export async function deleteDataSource(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/data-sources/${id}`, {
+        method: 'DELETE',
+        headers: await getHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to delete data source');
 }
 
 export async function fetchModels(): Promise<Record<string, unknown>[]> {

@@ -121,6 +121,7 @@ newsRouter.post('/validate', requireAdmin, async (_req: Request, res: Response) 
                         verification_status: status,
                         source_domain: v.sourceDomain,
                         is_verified: status === 'verified',
+                        is_duplicate: isDup,
                         validation_notes: (isDup ? [...v.reasons, 'Duplicate url_hash'] : v.reasons).join('; ') || null,
                     })
                     .eq('id', row.id);
@@ -156,7 +157,7 @@ newsRouter.post('/ingest', requireAdmin, async (req: Request, res: Response) => 
         const body = req.body as RawNewsArticle & { checkReachable?: boolean };
         const v = validateNewsArticle(body);
 
-        if (v.verificationStatus === 'rejected' || !v.normalizedUrl || !v.urlHash) {
+        if (v.verificationStatus === 'rejected' || v.reasons.length > 0 || !v.normalizedUrl || !v.urlHash) {
             return res.status(400).json({
                 error: 'Article failed source/URL validation',
                 reasons: v.reasons,
@@ -174,15 +175,17 @@ newsRouter.post('/ingest', requireAdmin, async (req: Request, res: Response) => 
             }
         }
 
-        // Duplicate check
-        const { data: existing } = await supabaseAdmin
-            .from('news_articles')
-            .select('id')
-            .eq('url_hash', v.urlHash)
-            .maybeSingle();
+        // Duplicate check (by normalized url_hash OR exact headline)
+        const [{ data: existingUrl }, { data: existingTitle }] = await Promise.all([
+            supabaseAdmin.from('news_articles').select('id').eq('url_hash', v.urlHash).maybeSingle(),
+            supabaseAdmin.from('news_articles').select('id').ilike('title', v.cleanTitle).limit(1).maybeSingle(),
+        ]);
 
-        if (existing) {
-            return res.status(409).json({ error: 'Duplicate article URL already exists', existingId: existing.id });
+        if (existingUrl || existingTitle) {
+            return res.status(409).json({
+                error: existingUrl ? 'Duplicate article URL already exists' : 'Duplicate article headline already exists',
+                existingId: existingUrl?.id ?? existingTitle?.id,
+            });
         }
 
         const insertPayload: Record<string, unknown> = {
@@ -204,6 +207,7 @@ newsRouter.post('/ingest', requireAdmin, async (req: Request, res: Response) => 
                 verification_status: v.verificationStatus,
                 source_domain: v.sourceDomain,
                 is_verified: v.isVerified,
+                is_duplicate: false,
                 validation_notes: v.reasons.join('; ') || null,
             })
             .select('*')
@@ -223,6 +227,55 @@ newsRouter.post('/ingest', requireAdmin, async (req: Request, res: Response) => 
         return res.status(201).json({ article: inserted, verificationStatus: v.verificationStatus });
     } catch (err: any) {
         console.error('[News] Ingest failed:', err.message);
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/news/clean-placeholders — admin-only audit & safe removal of confirmed invalid placeholder rows
+newsRouter.post('/clean-placeholders', requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const confirmDelete = req.body?.confirmDelete === true;
+        const { data, error } = await supabaseAdmin
+            .from('news_articles')
+            .select('id, title, url, source, published_at, verification_status')
+            .order('published_at', { ascending: false });
+
+        if (error) return res.status(500).json({ error: error.message });
+
+        const invalidPlaceholders = (data ?? []).filter((row: RawNewsArticle) => {
+            const v = validateNewsArticle(row);
+            return v.verificationStatus === 'rejected';
+        });
+
+        const idsToDelete = invalidPlaceholders.map((r: any) => r.id).filter(Boolean);
+        let deletedCount = 0;
+
+        if (confirmDelete && idsToDelete.length > 0) {
+            const { data: deleted, error: delErr } = await supabaseAdmin
+                .from('news_articles')
+                .delete()
+                .in('id', idsToDelete)
+                .select('id');
+
+            if (delErr) return res.status(500).json({ error: delErr.message });
+            deletedCount = deleted?.length ?? 0;
+        }
+
+        return res.json({
+            inspected: (data ?? []).length,
+            confirmedPlaceholders: invalidPlaceholders.length,
+            preservedLegitimate: (data ?? []).length - invalidPlaceholders.length,
+            deletedCount,
+            dryRun: !confirmDelete,
+            samples: invalidPlaceholders.slice(0, 20).map((r: any) => ({
+                id: r.id,
+                title: r.title,
+                url: r.url,
+                source: r.source,
+            })),
+        });
+    } catch (err: any) {
+        console.error('[News] Clean placeholders failed:', err.message);
         return res.status(500).json({ error: err.message });
     }
 });

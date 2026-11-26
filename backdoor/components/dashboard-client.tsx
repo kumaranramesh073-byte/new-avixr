@@ -117,7 +117,7 @@ export function DashboardClient({ data }: { data: any }) {
             <div className="flex items-center gap-2 font-medium">
               <IconUsers className="size-4" /> Registered accounts
             </div>
-            <div className="text-muted-foreground">{stats.activeToday} active in last 7 days</div>
+            <div className="text-muted-foreground">{stats.activeToday} active in last 24h</div>
           </CardFooter>
         </Card>
 

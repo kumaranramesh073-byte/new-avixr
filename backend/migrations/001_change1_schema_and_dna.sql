@@ -27,6 +27,8 @@ WITH ranked_dna AS (
            ) AS rn
     FROM public.business_dna_profiles
     WHERE is_active = true
+      AND organization_id IS NOT NULL
+      AND user_id IS NOT NULL
 )
 UPDATE public.business_dna_profiles b
 SET is_active = false,
@@ -82,6 +84,7 @@ ALTER TABLE public.news_articles
     ADD COLUMN IF NOT EXISTS verification_status TEXT    NOT NULL DEFAULT 'unverified',
     ADD COLUMN IF NOT EXISTS source_domain       TEXT,
     ADD COLUMN IF NOT EXISTS is_verified         BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS is_duplicate        BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS validation_notes    TEXT;
 
 DO $$
@@ -96,8 +99,33 @@ BEGIN
     END IF;
 END $$;
 
+-- Non-destructively flag existing duplicate url_hash rows BEFORE creating unique index
+-- so pre-existing duplicates never fail migration and zero rows are deleted automatically.
+WITH ranked_news AS (
+    SELECT id,
+           ROW_NUMBER() OVER (
+               PARTITION BY url_hash
+               ORDER BY published_at DESC NULLS LAST, retrieved_at DESC NULLS LAST, id ASC
+           ) AS rn
+    FROM public.news_articles
+    WHERE url_hash IS NOT NULL
+)
+UPDATE public.news_articles n
+SET is_duplicate = true,
+    is_verified = false,
+    verification_status = CASE
+        WHEN n.verification_status = 'rejected' THEN 'rejected'
+        ELSE 'unverified'
+    END,
+    validation_notes = COALESCE(NULLIF(n.validation_notes, ''), 'Flagged non-destructively as duplicate url_hash during migration')
+FROM ranked_news r
+WHERE n.id = r.id
+  AND r.rn > 1;
+
+-- Enforce unique url_hash for all non-duplicate rows going forward
 CREATE UNIQUE INDEX IF NOT EXISTS uq_news_articles_url_hash
-    ON public.news_articles (url_hash);
+    ON public.news_articles (url_hash)
+    WHERE is_duplicate = false AND url_hash IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_news_articles_verified_published
     ON public.news_articles (verification_status, published_at DESC);
