@@ -50,7 +50,40 @@ export const config = {
     // Grounding search providers (primary → fallback chain)
     tavilyApiKey: process.env.TAVILY_API_KEY || '',
     xaiApiKey: process.env.XAI_API_KEY || '',
+    // Razorpay LIVE Payments (Server-side only — never log or return secrets)
+    razorpayKeyId: (process.env.RAZORPAY_KEY_ID || '').trim(),
+    razorpayKeySecret: (process.env.RAZORPAY_KEY_SECRET || '').trim(),
+    razorpayWebhookSecret: (process.env.RAZORPAY_WEBHOOK_SECRET || '').trim(),
+    razorpayStrictStartup:
+        process.env.RAZORPAY_STRICT_STARTUP === 'true' || process.env.NODE_ENV === 'production',
 } as const;
+
+export function getMissingRazorpayEnvVars(): string[] {
+    const missing: string[] = [];
+    if (!config.razorpayKeyId) missing.push('RAZORPAY_KEY_ID');
+    if (!config.razorpayKeySecret) missing.push('RAZORPAY_KEY_SECRET');
+    if (!config.razorpayWebhookSecret) missing.push('RAZORPAY_WEBHOOK_SECRET');
+    return missing;
+}
+
+export function validateRazorpayStartupConfig(): void {
+    const missing = getMissingRazorpayEnvVars();
+    if (missing.length > 0) {
+        const msg = `Missing required Razorpay environment variable(s): ${missing.join(', ')}`;
+        if (config.razorpayStrictStartup) {
+            throw new Error(msg);
+        }
+        console.warn(`⚠️  ${msg} — Razorpay LIVE payment endpoints will return 503 until configured.`);
+        return;
+    }
+    if (!config.razorpayKeyId.startsWith('rzp_live_')) {
+        const msg = 'RAZORPAY_KEY_ID does not use live prefix (rzp_live_*). Configure a LIVE key for production.';
+        if (config.razorpayStrictStartup) {
+            throw new Error(msg);
+        }
+        console.warn(`⚠️  ${msg}`);
+    }
+}
 
 if (!config.llmApiKey) {
     console.warn('⚠️  No LLM credential set (LLM_API_KEY / HF_TOKEN / GROQ_API_KEY) — LLM calls will fail.');
